@@ -189,6 +189,11 @@ fn atender(mut s: TcpStream, porta: u16, chave: &str) -> std::io::Result<()> {
             }
             responder(&mut s, "200 OK", json, &estado_json())
         }
+        ("POST", "/api/alttab") => {
+            // mostra o painel por alguns segundos, para ver o vidro e as cores enquanto ajusta
+            crate::alternador::demonstrar(3500);
+            responder(&mut s, "200 OK", json, "{}")
+        }
         ("POST", "/api/registro") => {
             if let Some(c) = config::CAMINHO.get() {
                 abrir_arquivo(&c.with_file_name("flowcursor.log"));

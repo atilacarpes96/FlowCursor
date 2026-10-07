@@ -20,6 +20,8 @@ pub struct Config {
     pub onda_clique: bool,
     pub desativar_tela_cheia: bool,
     pub alternador: bool,
+    pub alttab_fosco: f32,
+    pub alttab_cor: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -45,6 +47,8 @@ impl Default for Config {
             onda_clique: true,
             desativar_tela_cheia: true,
             alternador: true,
+            alttab_fosco: 50.0,
+            alttab_cor: 50.0,
         }
     }
 }
@@ -83,6 +87,8 @@ desativar_tela_cheia = sim  # jogos e videos em tela cheia usam o ponteiro norma
 
 # Alt+Tab
 alternador = sim          # Alt+Tab do FlowCursor: miniaturas ao vivo agrupadas por aplicativo
+alttab_fosco = 50         # 0 a 100. Vidro do painel: 0 quase transparente, 100 bem fosco
+alttab_cor = 50           # 0 a 100. Cor do icone no topo de cada cartao (0 desliga)
 ";
 
 fn sim_nao(v: &str) -> Option<bool> {
@@ -128,6 +134,8 @@ pub fn analisar(texto: &str) -> (Config, Vec<String>) {
             "onda_clique" => sim_nao(v).map(|x| c.onda_clique = x),
             "desativar_tela_cheia" => sim_nao(v).map(|x| c.desativar_tela_cheia = x),
             "alternador" => sim_nao(v).map(|x| c.alternador = x),
+            "alttab_fosco" => num((0.0, 100.0)).map(|x| c.alttab_fosco = x),
+            "alttab_cor" => num((0.0, 100.0)).map(|x| c.alttab_cor = x),
             _ => {
                 avisos.push(format!("linha {}: chave desconhecida '{k}'", n + 1));
                 continue;
@@ -174,6 +182,8 @@ pub fn pares(c: &Config) -> Vec<(&'static str, String)> {
         ("onda_clique", sn(c.onda_clique)),
         ("desativar_tela_cheia", sn(c.desativar_tela_cheia)),
         ("alternador", sn(c.alternador)),
+        ("alttab_fosco", numero(c.alttab_fosco)),
+        ("alttab_cor", numero(c.alttab_cor)),
     ]
 }
 

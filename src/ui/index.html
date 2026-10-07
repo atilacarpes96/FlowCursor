@@ -331,7 +331,11 @@ const SECOES = [
   ]},
   { titulo: 'Alt+Tab', linhas: [
     { id: 'alternador', tipo: 'chave', nome: 'Alt+Tab do FlowCursor',
-      legenda: 'Miniaturas ao vivo agrupadas por aplicativo. Passe o mouse para ampliar, digite para buscar. Desligado, volta o do Windows.' },
+      legenda: 'Miniaturas ao vivo agrupadas por aplicativo. Pare o mouse sobre uma miniatura para ver a janela inteira; digite para buscar. Desligado, volta o do Windows.' },
+    { id: 'alttab_fosco', nome: 'Vidro', min: 0, max: 100, passo: 1,
+      fmt: v => v < 15 ? 'transparente' : v > 85 ? 'bem fosco' : pct(v), legenda: 'Menos fosco deixa ver mais o que está atrás do painel; mais fosco fica leitoso.' },
+    { id: 'alttab_cor', nome: 'Cor dos cartões', min: 0, max: 100, passo: 1,
+      fmt: v => v == 0 ? 'desligada' : pct(v), legenda: 'Tom do ícone de cada aplicativo no topo do cartão.' },
   ]},
 ];
 
@@ -389,7 +393,9 @@ function montar() {
   const acoes = el('div', 'acoes');
   const registro = el('button', 'botao', 'Abrir registro');
   registro.onclick = () => api('/api/registro', '').catch(desconectado);
-  acoes.append(registro);
+  const verAltTab = el('button', 'botao', 'Ver o Alt+Tab');
+  verAltTab.onclick = () => api('/api/alttab', '').catch(desconectado);
+  acoes.append(verAltTab, registro);
   main.append(acoes);
   main.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
 }

@@ -116,12 +116,12 @@ fn descricao_exe(caminho: &str) -> Option<String> {
     }
 }
 
-/// Ícone grande do executável (48 px), extraído dos recursos dele.
+/// Ícone grande do executável (128 px, para reduzir com qualidade no painel), extraído dos recursos dele.
 fn icone_exe(caminho: &str) -> HANDLE {
     unsafe {
         let mut icone: HANDLE = 0;
         let mut id = 0u32;
-        let n = PrivateExtractIconsW(w(caminho).as_ptr(), 0, 48, 48, &mut icone, &mut id, 1, 0);
+        let n = PrivateExtractIconsW(w(caminho).as_ptr(), 0, 128, 128, &mut icone, &mut id, 1, 0);
         if n == 1 && icone != 0 {
             return icone;
         }

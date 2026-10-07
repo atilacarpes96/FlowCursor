@@ -20,7 +20,7 @@ const ESPERA_PREVIA: Duration = Duration::from_millis(140);
 /// Miniaturas por linha dentro de um cartão.
 const COLUNAS_MAX: usize = 4;
 /// Altura do cabeçalho de cada cartão (ícone e nome do aplicativo), em px a 100%.
-const CABECALHO: f32 = 46.0;
+const CABECALHO: f32 = 50.0;
 
 // ---------- Geometria e molas ----------
 
@@ -252,14 +252,18 @@ impl Tela<'_> {
     }
 
     /// Desenha um ícone do Windows (com transparência) em (x, y) no tamanho `lado`.
+    /// O Windows reduz ícone grande pegando pixels soltos (fica serrilhado); aqui ele é
+    /// desenhado em até 4x o tamanho e reduzido pela média, que deixa as bordas lisas.
     fn icone(&mut self, icone: HANDLE, x: f32, y: f32, lado: f32) {
         if icone == 0 {
             return;
         }
         let n = lado.round().max(1.0) as usize;
+        let f = (256 / n).clamp(1, 4);
+        let m = n * f;
         unsafe {
             let bmi = BITMAPINFO {
-                bmiHeader: BITMAPINFOHEADER { biSize: 40, biWidth: n as i32, biHeight: -(n as i32), biPlanes: 1, biBitCount: 32, ..Default::default() },
+                bmiHeader: BITMAPINFOHEADER { biSize: 40, biWidth: m as i32, biHeight: -(m as i32), biPlanes: 1, biBitCount: 32, ..Default::default() },
                 bmiColors: [0],
             };
             let mut bits: *mut c_void = null_mut();
@@ -269,21 +273,32 @@ impl Tela<'_> {
             }
             let dc = CreateCompatibleDC(0);
             let antigo = SelectObject(dc, dib);
-            DrawIconEx(dc, 0, 0, icone, n as i32, n as i32, 0, 0, DI_NORMAL);
-            let px = std::slice::from_raw_parts(bits as *const u32, n * n);
+            DrawIconEx(dc, 0, 0, icone, m as i32, m as i32, 0, 0, DI_NORMAL);
+            let grande = std::slice::from_raw_parts(bits as *const u32, m * m);
             // Ícones antigos (sem canal alfa) saem com alfa zero: aí vale a cor como opaca.
-            let tem_alfa = px.iter().any(|&c| c >> 24 != 0);
+            let tem_alfa = grande.iter().any(|&c| c >> 24 != 0);
             let (ox, oy) = (x.round() as i64, y.round() as i64);
+            let area = (f * f) as u32;
             for j in 0..n {
                 for i in 0..n {
                     let (dx, dy) = (ox + i as i64, oy + j as i64);
                     if dx < 0 || dy < 0 || dx as usize >= self.w || dy as usize >= self.h || !self.recorte.contem(dx as f32 + 0.5, dy as f32 + 0.5) {
                         continue;
                     }
-                    let mut c = px[j * n + i];
-                    if !tem_alfa {
-                        c = if c & 0xFF_FFFF != 0 { c | 0xFF00_0000 } else { 0 };
+                    // média dos f x f pixels (cores pré-multiplicadas, então a média é direta)
+                    let mut soma = [0u32; 4];
+                    for b in 0..f {
+                        for a in 0..f {
+                            let mut c = grande[(j * f + b) * m + i * f + a];
+                            if !tem_alfa {
+                                c = if c & 0xFF_FFFF != 0 { c | 0xFF00_0000 } else { 0 };
+                            }
+                            for (k, s) in soma.iter_mut().enumerate() {
+                                *s += (c >> (k * 8)) & 255;
+                            }
+                        }
                     }
+                    let c = (0..4).fold(0u32, |acc, k| acc | (((soma[k] + area / 2) / area) << (k * 8)));
                     sobrepor(&mut self.px[dy as usize * self.w + dx as usize], c);
                 }
             }
@@ -441,10 +456,8 @@ struct Tema {
     cartao_borda: [f32; 4],
     vaga: [f32; 4],
     etiqueta: [f32; 4],
-    /// véu, brilho do cabeçalho e borda dos cartões na cor do ícone do app
-    tinta_cartao: f32,
+    /// tom do ícone do app que desce do topo de cada cartão
     tinta_cabecalho: f32,
-    tinta_borda: f32,
     /// sombra do nome do app (legibilidade no vidro)
     sombra_texto: u32,
     texto: u32,
@@ -453,21 +466,24 @@ struct Tema {
     destaque: [f32; 4],
 }
 
-fn tema(escuro: bool, destaque: [f32; 3]) -> Tema {
+/// osco e cor vêm dos ajustes (0 a 1; 0,5 é o padrão).
+fn tema(escuro: bool, destaque: [f32; 3], fosco: f32, cor: f32) -> Tema {
     let d = [destaque[0], destaque[1], destaque[2], 1.0];
+    // fosco: até a metade vai de transparente ao vidro padrão; depois fica leitoso
+    let k = if fosco < 0.5 { fosco * 2.0 } else { 1.0 + (fosco - 0.5) * 10.0 };
+    let cor = cor * 2.0;
+    let acento = |base: u32| ((((base >> 24) as f32 * k).min(192.0) as u32) << 24) | (base & 0xFF_FFFF);
     if escuro {
         Tema {
-            acento: 0x1014_1414,
-            tinta: [1.0, 1.0, 1.0, 0.035],
+            acento: acento(0x1014_1414),
+            tinta: [1.0, 1.0, 1.0, (0.035 * k).min(0.5)],
             brilho: [1.0, 1.0, 1.0, 0.075],
             borda: [1.0, 1.0, 1.0, 0.26],
             cartao: [1.0, 1.0, 1.0, 0.045],
             cartao_borda: [1.0, 1.0, 1.0, 0.11],
             vaga: [0.0, 0.0, 0.0, 0.22],
             etiqueta: [0.07, 0.07, 0.09, 0.78],
-            tinta_cartao: 0.07,
-            tinta_cabecalho: 0.17,
-            tinta_borda: 0.30,
+            tinta_cabecalho: 0.13 * cor,
             sombra_texto: 0x8C00_0000,
             texto: 0xFFF5F5F7,
             texto2: 0xD9E6E6EB,
@@ -476,17 +492,15 @@ fn tema(escuro: bool, destaque: [f32; 3]) -> Tema {
         }
     } else {
         Tema {
-            acento: 0x40F2_F2F2,
-            tinta: [1.0, 1.0, 1.0, 0.22],
+            acento: acento(0x40F2_F2F2),
+            tinta: [1.0, 1.0, 1.0, (0.22 * k).min(0.7)],
             brilho: [1.0, 1.0, 1.0, 0.30],
             borda: [1.0, 1.0, 1.0, 0.85],
             cartao: [1.0, 1.0, 1.0, 0.34],
             cartao_borda: [1.0, 1.0, 1.0, 0.7],
             vaga: [0.0, 0.0, 0.0, 0.06],
             etiqueta: [0.98, 0.98, 0.99, 0.85],
-            tinta_cartao: 0.10,
-            tinta_cabecalho: 0.20,
-            tinta_borda: 0.55,
+            tinta_cabecalho: 0.16 * cor,
             sombra_texto: 0x99FF_FFFF,
             texto: 0xFF111114,
             texto2: 0xD92C2C30,
@@ -873,7 +887,8 @@ impl Painel {
             DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, (&(escuro as i32) as *const i32).cast(), 4);
             DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, (&sim as *const i32).cast(), 4);
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&redondo as *const i32).cast(), 4);
-            let tema = tema(escuro, cor_destaque());
+            let c = crate::laco::config_atual();
+            let tema = tema(escuro, cor_destaque(), c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
             aplicar_vidro(hwnd, tema.acento);
             Some(Painel {
                 hwnd,
@@ -976,7 +991,8 @@ impl Painel {
         self.monitor = Ret { x: r.left as f32, y: r.top as f32, w: (r.right - r.left) as f32, h: (r.bottom - r.top) as f32 };
         self.escala = crate::sistema::escala_dpi(pt);
         let escuro = tema_escuro();
-        self.tema = tema(escuro, cor_destaque());
+        let c = crate::laco::config_atual();
+        self.tema = tema(escuro, cor_destaque(), c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
         unsafe { DwmSetWindowAttribute(self.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, (&(escuro as i32) as *const i32).cast(), 4) };
         aplicar_vidro(self.hwnd, self.tema.acento);
         self.itens = janelas
@@ -1214,20 +1230,13 @@ impl Painel {
 
             for (g, cor) in self.grupos.iter().zip(&cores) {
                 let raio = 16.0 * s;
-                match cor {
-                    // cartão na cor do ícone: véu leve no cartão inteiro, mais forte no cabeçalho
-                    Some(c) => {
-                        tela.preencher(g.ret, raio, [c[0], c[1], c[2], tema.tinta_cartao]);
-                        tela.brilho(g.ret, raio, [c[0], c[1], c[2], tema.tinta_cabecalho], (CABECALHO * 1.5 * s / g.ret.h).min(0.7));
-                        let borda = [0.5 + c[0] * 0.5, 0.5 + c[1] * 0.5, 0.5 + c[2] * 0.5, tema.tinta_borda];
-                        tela.contornar_iluminado(g.ret, raio, 1.0 * s, borda, 0.4);
-                    }
-                    None => {
-                        tela.preencher(g.ret, raio, tema.cartao);
-                        tela.contornar_iluminado(g.ret, raio, 1.0 * s, tema.cartao_borda, 0.45);
-                    }
+                tela.preencher(g.ret, raio, tema.cartao);
+                // tom do ícone só no topo do cartão, sumindo até o fim do cabeçalho
+                if let Some(c) = cor.filter(|_| tema.tinta_cabecalho > 0.005) {
+                    tela.brilho(g.ret, raio, [c[0], c[1], c[2], tema.tinta_cabecalho], (CABECALHO * s / g.ret.h).min(0.6));
                 }
-                let lado = 26.0 * s;
+                tela.contornar_iluminado(g.ret, raio, 1.0 * s, tema.cartao_borda, 0.45);
+                let lado = 30.0 * s;
                 let (xi, yc) = (g.ret.x + 14.0 * s, g.ret.y + CABECALHO * s / 2.0 + 1.0 * s);
                 tela.icone(g.icone, xi, yc - lado / 2.0, lado);
                 let contagem = if g.n > 1 { 30.0 * s } else { 0.0 };
@@ -1244,8 +1253,11 @@ impl Painel {
                 if g.n > 1 {
                     // quantas janelas, numa pílula na cor do cartão
                     let p = Ret { x: g.ret.x + g.ret.w - 12.0 * s - 24.0 * s, y: yc - 10.0 * s, w: 24.0 * s, h: 20.0 * s };
-                    let c = cor.unwrap_or([1.0, 1.0, 1.0]);
-                    tela.preencher(p, 10.0 * s, [c[0], c[1], c[2], tema.tinta_cabecalho * 1.4]);
+                    let (c, a) = match cor {
+                        Some(c) if tema.tinta_cabecalho > 0.005 => (*c, (tema.tinta_cabecalho * 1.6).max(0.08)),
+                        _ => ([1.0, 1.0, 1.0], 0.08),
+                    };
+                    tela.preencher(p, 10.0 * s, [c[0], c[1], c[2], a]);
                     rotulos.push(Rotulo { texto: g.n.to_string(), r: p, tam: 12.0 * s, semi: true, cor: tema.texto2, alinhar: STRING_ALIGN_CENTER, sombra: 0 });
                 }
             }

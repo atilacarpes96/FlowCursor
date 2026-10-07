@@ -39,6 +39,7 @@ A tela grava no mesmo arquivo.
 | `rastro`, `rastro_intensidade`, `rastro_velocidade` | comprimento e opacidade do rastro (cópias da própria seta) e a velocidade a partir da qual ele aparece |
 | `clique`, `onda_clique` | o ponteiro encolhe e uma onda se abre ao clicar |
 | `desativar_tela_cheia` | jogos e vídeos em tela cheia usam o ponteiro normal |
+| `alttab_fosco`, `alttab_cor` | vidro do painel do Alt+Tab e cor no topo dos cartões (0 a 100) |
 
 ## Alt+Tab
 
@@ -47,8 +48,10 @@ verdade do Windows, que aparece mesmo com o painel sem foco):
 
 - um cartão por aplicativo (o usado por último primeiro) com as janelas em miniaturas quadradas
   ao vivo, todas do mesmo tamanho, com a imagem recortada a partir do canto de cima à esquerda;
-- cada cartão leva a cor do ícone do aplicativo (ícone sem cor deixa o cartão neutro), com o
-  ícone grande e o nome em destaque no cabeçalho, para achar o app mesmo com miniaturas parecidas;
+- o topo de cada cartão leva um tom discreto da cor do ícone do aplicativo (ícone sem cor deixa o
+  cartão neutro), com o ícone grande e o nome em destaque, para achar o app mesmo com miniaturas parecidas;
+- na tela de ajustes, seção Alt+Tab: **Vidro** (de quase transparente a bem fosco), **Cor dos cartões**
+  (0 desliga) e o botão **Ver o Alt+Tab**, que mostra o painel por alguns segundos;
 - parar o mouse sobre uma miniatura abre a prévia da janela inteira por cima das outras (que
   recuam um pouco), com o título embaixo; a prévia não amplia além do tamanho real da janela;
 - a seleção é um anel na cor de destaque do Windows, numa camada própria por cima das
