@@ -8,6 +8,21 @@ use std::ptr::{null, null_mut};
 
 const CLASSE: &str = "FlowCursorCamada";
 
+/// Janela que continuou acima do desenho depois de subir. Só é barreira se estiver numa
+/// camada do Windows acima da nossa; uma janela comum que subiu no mesmo instante (o
+/// painel do Alt+Tab, por exemplo) perde no próximo quadro. Sem como saber a camada,
+/// vale o que ficou acima, menos as janelas do próprio FlowCursor.
+fn e_barreira(h: HWND) -> bool {
+    match crate::sistema::camada(h) {
+        Some(banda) => banda > 1,
+        None => unsafe {
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(h, &mut pid);
+            pid != GetCurrentProcessId()
+        },
+    }
+}
+
 unsafe extern "system" fn procedimento(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     if msg == WM_NCHITTEST {
         return HTTRANSPARENT;
@@ -178,7 +193,7 @@ impl Overlay {
                 if IsWindowVisible(acima) != 0 {
                     self.trazer_para_frente();
                     let novo = GetWindow(self.hwnd, GW_HWNDPREV);
-                    let barreira = (novo != 0 && self.barreiras.insert(novo)).then_some(novo);
+                    let barreira = (novo != 0 && e_barreira(novo) && self.barreiras.insert(novo)).then_some(novo);
                     return Some((acima, barreira));
                 }
                 acima = GetWindow(acima, GW_HWNDPREV);

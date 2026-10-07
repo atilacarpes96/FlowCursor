@@ -420,8 +420,8 @@ fn e_do_sistema(classe: &str, processo: &str) -> bool {
 /// "sempre visíveis" como o desenho do FlowCursor, ficam na camada 1. Algumas ficam
 /// numa camada acima, que programa comum nenhum consegue passar: o Gerenciador de
 /// Tarefas com "Sempre visível" ligado fica na 16. `GetWindowBand` não é documentada,
-/// então é buscada na hora; se faltar, toda janela conta como camada 1.
-fn camada(h: HWND) -> u32 {
+/// então é buscada na hora; `None` se faltar ou falhar.
+pub fn camada(h: HWND) -> Option<u32> {
     type GetWindowBandFn = unsafe extern "system" fn(HWND, *mut u32) -> BOOL;
     static FUNCAO: OnceLock<Option<GetWindowBandFn>> = OnceLock::new();
     let funcao = FUNCAO.get_or_init(|| unsafe {
@@ -429,13 +429,8 @@ fn camada(h: HWND) -> u32 {
         let f = if user32 != 0 { GetProcAddress(user32, c"GetWindowBand".as_ptr().cast()) } else { null() };
         (!f.is_null()).then(|| std::mem::transmute::<*const c_void, GetWindowBandFn>(f))
     });
-    let mut banda = 1u32;
-    if let Some(f) = funcao {
-        if unsafe { f(h, &mut banda) } == 0 {
-            banda = 1;
-        }
-    }
-    banda
+    let mut banda = 0u32;
+    (unsafe { funcao.as_ref()?(h, &mut banda) } != 0).then_some(banda)
 }
 
 fn tela_cheia(h: HWND, classe: &str) -> bool {
@@ -497,7 +492,7 @@ pub fn vigiar(sair: &std::sync::atomic::AtomicBool, desativar_tela_cheia: &std::
                 (SITUACAO_SISTEMA, format!("{} em primeiro plano", fg_info.1))
             } else if e_do_sistema(&sob_info.0, &sob_info.1) {
                 (SITUACAO_SISTEMA, format!("ponteiro sobre {} ({})", sob_info.1, sob_info.0))
-            } else if !sob_info.0.is_empty() && camada(sob) > 1 {
+            } else if !sob_info.0.is_empty() && camada(sob).is_some_and(|b| b > 1) {
                 // Sobre ela o desenho ficaria por baixo, cortado ou invisível.
                 (SITUACAO_SISTEMA, format!("ponteiro sobre {} ({}), numa camada acima do FlowCursor", sob_info.1, sob_info.0))
             } else if desativar_tela_cheia.load(Ordering::Relaxed) && !oculta_pelo_dwm(fg) && tela_cheia(fg, &fg_info.0) {
