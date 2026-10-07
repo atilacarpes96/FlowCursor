@@ -1,0 +1,14 @@
+[package]
+name = "flowcursor"
+version = "0.3.0"
+edition = "2021"
+description = "Ponteiro do Windows com mola, borrÃ£o de movimento e rastro"
+
+# Sem dependÃªncias: as funÃ§Ãµes do Windows sÃ£o declaradas em src/ffi.rs
+# e ligadas com raw-dylib, entÃ£o compila sem baixar nada.
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>FlowCursor</title>
+<link rel="icon" href="/icone.svg" type="image/svg+xml">
+<style>
+:root {
+  --fundo: #f2f2f7;
+  --cartao: rgba(255, 255, 255, 0.72);
+  --borda-cartao: rgba(255, 255, 255, 0.9);
+  --separador: rgba(60, 60, 67, 0.14);
+  --texto: #000;
+  --texto-2: rgba(60, 60, 67, 0.62);
+  --texto-3: rgba(60, 60, 67, 0.32);
+  --destaque: #007aff;
+  --verde: #34c759;
+  --vermelho: #ff3b30;
+  --trilha: rgba(120, 120, 128, 0.2);
+  --chave-off: rgba(120, 120, 128, 0.16);
+  --seg-fundo: rgba(118, 118, 128, 0.12);
+  --seg-pilula: #fff;
+  --sombra-cartao: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(30, 40, 90, 0.07);
+  --bolha-1: #8fd3ff;
+  --bolha-2: #b9b2ff;
+  --bolha-3: #ffc2e0;
+  --topo: rgba(242, 242, 247, 0.62);
+  --marca: rgba(60, 60, 67, 0.55);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #000;
+    --cartao: rgba(28, 28, 30, 0.66);
+    --borda-cartao: rgba(255, 255, 255, 0.07);
+    --separador: rgba(84, 84, 88, 0.42);
+    --texto: #fff;
+    --texto-2: rgba(235, 235, 245, 0.6);
+    --texto-3: rgba(235, 235, 245, 0.3);
+    --destaque: #0a84ff;
+    --verde: #30d158;
+    --vermelho: #ff453a;
+    --trilha: rgba(120, 120, 128, 0.32);
+    --chave-off: rgba(120, 120, 128, 0.32);
+    --seg-fundo: rgba(118, 118, 128, 0.24);
+    --seg-pilula: #636366;
+    --sombra-cartao: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 34px rgba(0, 0, 0, 0.45);
+    --bolha-1: #0b5394;
+    --bolha-2: #3b2a8f;
+    --bolha-3: #7a1f5c;
+    --topo: rgba(0, 0, 0, 0.55);
+    --marca: rgba(235, 235, 245, 0.6);
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--fundo);
+  color: var(--texto);
+  font: 15px/1.35 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  min-height: 100vh;
+}
+
+/* Barra de rolagem fina, por cima do conteúdo */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--texto-3); border-radius: 5px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--texto-2); background-clip: padding-box; }
+
+/* Manchas de cor atrás do vidro: sem elas o desfoque não aparece. */
+.fundo { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
+.fundo i {
+  position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%;
+  filter: blur(70px); opacity: 0.55; animation: flutuar 26s ease-in-out infinite alternate;
+}
+.fundo i:nth-child(1) { background: var(--bolha-1); left: -24vmax; top: -18vmax; }
+.fundo i:nth-child(2) { background: var(--bolha-2); right: -28vmax; top: 22vh; animation-duration: 32s; }
+.fundo i:nth-child(3) { background: var(--bolha-3); left: -10vmax; bottom: -34vmax; animation-duration: 38s; }
+@keyframes flutuar { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
+@media (prefers-reduced-motion: reduce) { .fundo i { animation: none; } }
+
+header {
+  position: sticky; top: 0; z-index: 5;
+  padding: 18px 20px 14px;
+  background: var(--topo);
+  backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid transparent;
+  transition: border-color .2s;
+}
+header.rolado { border-bottom-color: var(--separador); }
+.topo-linha { display: flex; align-items: center; gap: 14px; max-width: 520px; margin: 0 auto; }
+.app-icone { width: 52px; height: 52px; border-radius: 13px; box-shadow: 0 6px 18px rgba(94, 92, 230, 0.35); }
+.titulos { flex: 1; min-width: 0; }
+h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+#status { margin: 2px 0 0; color: var(--texto-2); font-size: 13px; }
+#status b { font-weight: 600; color: var(--verde); }
+#status b.pausado { color: var(--texto-2); }
+
+main { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; padding: 4px 16px 36px; }
+section { animation: surgir .45s cubic-bezier(.2, .8, .2, 1) both; }
+section:nth-of-type(2) { animation-delay: .04s; }
+section:nth-of-type(3) { animation-delay: .08s; }
+section:nth-of-type(4) { animation-delay: .12s; }
+section:nth-of-type(5) { animation-delay: .16s; }
+@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
+h2 {
+  margin: 24px 16px 7px; font-size: 13px; font-weight: 400;
+  color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.02em;
+}
+.rodape { margin: 7px 16px 0; font-size: 13px; color: var(--texto-2); }
+
+.cartao {
+  background: var(--cartao);
+  backdrop-filter: blur(28px) saturate(170%);
+  border: 1px solid var(--borda-cartao);
+  border-radius: 14px;
+  box-shadow: var(--sombra-cartao);
+  overflow: hidden;
+}
+.linha { position: relative; padding: 12px 16px; }
+.linha + .linha::before {
+  content: ""; position: absolute; top: 0; left: 16px; right: 0;
+  height: 1px; background: var(--separador);
+}
+.cabeca { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
+.nome { font-size: 16px; }
+.valor { color: var(--texto-2); font-variant-numeric: tabular-nums; font-size: 15px; white-space: nowrap; }
+.legenda { margin-top: 1px; color: var(--texto-2); font-size: 13px; }
+
+/* Controle deslizante no estilo iOS */
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 30px; margin: 4px 0 -4px; background: transparent; cursor: pointer;
+  --p: 50%;
+}
+input[type=range]:focus { outline: none; }
+input[type=range]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  /* marquinha onde fica o valor padrão, por cima do preenchimento */
+  background:
+    linear-gradient(to right, transparent calc(var(--d, -10%) - 1.5px), var(--marca) calc(var(--d, -10%) - 1.5px),
+      var(--marca) calc(var(--d, -10%) + 1.5px), transparent calc(var(--d, -10%) + 1.5px)),
+    linear-gradient(to right, var(--destaque) var(--p), var(--trilha) var(--p));
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 27px; height: 27px; margin-top: -11.5px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  transition: transform .18s cubic-bezier(.3, 1.6, .5, 1);
+}
+input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
+input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--destaque) 35%, transparent); }
+
+/* Restaurar padrões */
+.topo-acoes { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 4px 0; }
+#resumo { font-size: 13px; color: var(--texto-2); }
+.pilula-botao {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  height: 34px; padding: 0 14px; border-radius: 17px;
+  border: 1px solid var(--borda-cartao); background: var(--cartao);
+  backdrop-filter: blur(28px) saturate(170%); box-shadow: var(--sombra-cartao);
+  color: var(--destaque); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: transform .15s, background .2s, color .2s;
+}
+.pilula-botao:active { transform: scale(0.96); }
+.pilula-botao.confirmar { background: var(--vermelho); color: #fff; border-color: transparent; }
+.pilula-botao:disabled { opacity: 0.45; cursor: default; }
+.direita { display: flex; align-items: center; gap: 8px; }
+.volta {
+  display: none; align-items: center; height: 22px; padding: 0 8px; border: 0; border-radius: 11px;
+  background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--destaque);
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.volta.visivel { display: inline-flex; }
+
+/* Chave liga/desliga */
+.chave { position: relative; width: 51px; height: 31px; flex: none; }
+.chave input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+.chave span { position: absolute; inset: 0; border-radius: 16px; background: var(--chave-off); transition: background .25s; }
+.chave span::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
+  transition: transform .3s cubic-bezier(.3, 1.4, .5, 1);
+}
+.chave input:checked + span { background: var(--verde); }
+.chave input:checked + span::after { transform: translateX(20px); }
+.chave input:focus-visible + span { box-shadow: 0 0 0 3px color-mix(in srgb, var(--destaque) 40%, transparent); }
+
+/* Controle segmentado */
+.segmentado {
+  position: relative; display: grid; grid-template-columns: 1fr 1fr;
+  margin-top: 10px; padding: 2px; border-radius: 10px; background: var(--seg-fundo);
+}
+.segmentado .pilula {
+  position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 8px;
+  background: var(--seg-pilula);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+  transition: transform .32s cubic-bezier(.3, 1.3, .5, 1);
+}
+.segmentado[data-v=claro] .pilula { transform: translateX(100%); }
+.segmentado button {
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; border: 0; background: none; color: var(--texto); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.segmentado svg { width: 15px; height: 22px; overflow: visible; }
+
+/* Área de teste */
+.grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--separador); }
+.ladrilho {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  height: 66px; background: var(--cartao); font-size: 12px; color: var(--texto-2); text-align: center;
+  transition: background .15s;
+}
+.ladrilho:hover { background: color-mix(in srgb, var(--destaque) 10%, var(--cartao)); color: var(--texto); }
+.ladrilho b { font-size: 18px; font-weight: 400; color: var(--texto); line-height: 1; font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-variant-emoji: text; }
+.pista {
+  position: relative; height: 150px; cursor: default;
+  background:
+    linear-gradient(90deg, #fff 0 33.3%, transparent 33.3% 66.6%, #1c1c1e 66.6%),
+    linear-gradient(120deg, #5ac8fa, #5e5ce6 45%, #bf5af2 70%, #ff9f0a);
+  display: grid; place-items: center;
+}
+.pista span {
+  padding: 6px 12px; border-radius: 999px; font-size: 13px;
+  color: var(--texto); background: var(--cartao); backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--borda-cartao); pointer-events: none;
+}
+
+/* Botões */
+.acoes { display: flex; gap: 10px; margin-top: 24px; }
+.botao {
+  flex: 1; height: 46px; border-radius: 12px; border: 1px solid var(--borda-cartao);
+  background: var(--cartao); backdrop-filter: blur(28px) saturate(170%);
+  box-shadow: var(--sombra-cartao);
+  color: var(--destaque); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
+  transition: transform .15s, color .2s;
+}
+.botao:active { transform: scale(0.97); }
+.botao.perigo { color: var(--vermelho); }
+.atalhos { margin: 18px 16px 0; text-align: center; font-size: 12.5px; color: var(--texto-2); }
+kbd {
+  font: inherit; font-size: 12px; padding: 1px 6px; border-radius: 5px;
+  background: var(--seg-fundo); color: var(--texto);
+}
+
+/* FlowCursor fechado */
+#aviso {
+  position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 9; max-width: 488px; margin: 0 auto;
+  padding: 14px 16px; border-radius: 14px; font-size: 14px;
+  background: var(--cartao); backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--borda-cartao); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+#aviso b { color: var(--vermelho); }
+body.desligado main { opacity: 0.45; pointer-events: none; filter: saturate(0.4); transition: opacity .3s; }
+</style>
+</head>
+<body>
+<div class="fundo" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header id="topo">
+  <div class="topo-linha">
+    <img class="app-icone" src="/icone.svg" alt="">
+    <div class="titulos">
+      <h1>FlowCursor</h1>
+      <p id="status">Conectando…</p>
+    </div>
+    <label class="chave" title="Ligar ou pausar (Ctrl+Alt+F9)">
+      <input type="checkbox" id="ativo" aria-label="FlowCursor ativo"><span></span>
+    </label>
+  </div>
+</header>
+
+<main id="conteudo"></main>
+
+<div id="aviso" hidden><b>O FlowCursor foi fechado.</b> Abra o FlowCursor de novo pelo atalho para continuar ajustando.</div>
+
+<script>
+const CHAVE = new URLSearchParams(location.search).get('t') || '';
+
+async function api(rota, corpo) {
+  const r = await fetch(rota, {
+    method: corpo === undefined ? 'GET' : 'POST',
+    headers: { 'X-Token': CHAVE, 'Content-Type': 'text/plain;charset=utf-8' },
+    body: corpo,
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+const pct = v => Math.round(v) + '%';
+const SETA = '0.5,0.5 0.5,17.5 4.5,13.8 7.3,20.1 9.9,19 7.2,12.9 12.5,12.9';
+const seta = (fill, borda, larg) =>
+  `<svg viewBox="-2 -2 17 25"><polygon points="${SETA}" fill="${fill}" stroke="${borda}" stroke-width="${larg}" stroke-linejoin="round" paint-order="stroke"/></svg>`;
+
+const SECOES = [
+  { titulo: 'Aparência', linhas: [
+    { tipo: 'estilo', nome: 'Estilo' },
+    { id: 'tamanho', nome: 'Tamanho', min: 0.5, max: 3, passo: 0.05, fmt: v => Math.round(v * 100) + '%',
+      legenda: '100% é o tamanho do ponteiro padrão do Windows.' },
+    { id: 'sombra', nome: 'Sombra', min: 0, max: 100, passo: 1, fmt: pct },
+  ]},
+  { titulo: 'Movimento', rodape: 'A mola muda só o desenho: o clique acontece sempre no ponto real do mouse.', linhas: [
+    { id: 'responsividade', nome: 'Responsividade', min: 0, max: 100, passo: 1,
+      fmt: v => v >= 99.5 ? 'sem mola' : pct(v), legenda: 'Quanto o desenho acompanha o ponteiro real.' },
+    { id: 'elasticidade', nome: 'Elasticidade', min: 0, max: 100, passo: 1, fmt: pct,
+      legenda: 'Passa um pouco do ponto e volta, como uma mola.' },
+    { id: 'antecipacao', nome: 'Antecipação', min: 0, max: 100, passo: 1, fmt: pct,
+      legenda: 'Compensa o atraso da mola em movimentos contínuos.' },
+  ]},
+  { titulo: 'Efeitos', linhas: [
+    { id: 'borrao', nome: 'Borrão de movimento', min: 0, max: 100, passo: 1, fmt: pct,
+      legenda: 'Cresce com a velocidade; parado, o ponteiro fica nítido.' },
+    { id: 'rastro', nome: 'Comprimento do rastro', min: 0, max: 100, passo: 1,
+      fmt: v => v == 0 ? 'desligado' : Math.round(v * 1.4) + ' ms',
+      legenda: 'Cópias da própria seta que ficam pelo caminho nos movimentos rápidos.' },
+    { id: 'rastro_intensidade', nome: 'Intensidade do rastro', min: 0, max: 100, passo: 1, fmt: pct },
+    { id: 'rastro_velocidade', nome: 'Rastro a partir de', min: 300, max: 6000, passo: 100,
+      fmt: v => Math.round(v).toLocaleString('pt-BR') + ' px/s', legenda: 'Velocidade mínima para o rastro aparecer.' },
+    { id: 'clique', tipo: 'chave', nome: 'Encolher ao clicar' },
+    { id: 'onda_clique', tipo: 'chave', nome: 'Onda no clique' },
+  ]},
+  { titulo: 'Geral', linhas: [
+    { id: 'desativar_tela_cheia', tipo: 'chave', nome: 'Ponteiro normal em tela cheia',
+      legenda: 'Jogos e vídeos em tela cheia usam o ponteiro do Windows.' },
+    { id: 'iniciar', tipo: 'chave', nome: 'Abrir junto com o Windows', fora: true },
+  ]},
+  { titulo: 'Alt+Tab', linhas: [
+    { id: 'alternador', tipo: 'chave', nome: 'Alt+Tab do FlowCursor',
+      legenda: 'Miniaturas ao vivo agrupadas por aplicativo. Passe o mouse para ampliar, digite para buscar. Desligado, volta o do Windows.' },
+  ]},
+];
+
+const TESTES = [
+  ['default', '↖', 'Seta'], ['pointer', '☝︎', 'Link'], ['text', 'I', 'Texto'], ['wait', '◌', 'Ocupado'],
+  ['progress', '↖◌', 'Abrindo'], ['crosshair', '+', 'Mira'], ['not-allowed', '⊘', 'Proibido'], ['move', '✥', 'Mover'],
+  ['ew-resize', '↔', 'Largura'], ['ns-resize', '↕', 'Altura'], ['nwse-resize', '⤡', 'Diagonal'], ['nesw-resize', '⤢', 'Diagonal'],
+];
+
+let cfg = null;
+let padrao = null;
+const controles = {};
+let ultimoToque = 0;
+
+function el(tag, classe, html) {
+  const e = document.createElement(tag);
+  if (classe) e.className = classe;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function montar() {
+  const main = document.getElementById('conteudo');
+  const topo = el('div', 'topo-acoes');
+  const resumo = el('span', '', '');
+  resumo.id = 'resumo';
+  const botao = el('button', 'pilula-botao', '↺ Restaurar padrões');
+  botao.id = 'restaurar';
+  botao.onclick = () => confirmarPadrao(botao);
+  topo.append(resumo, botao);
+  main.append(topo);
+  for (const s of SECOES) {
+    const sec = el('section');
+    sec.append(el('h2', '', s.titulo));
+    const cartao = el('div', 'cartao');
+    for (const l of s.linhas) cartao.append(linha(l));
+    sec.append(cartao);
+    if (s.rodape) sec.append(el('p', 'rodape', s.rodape));
+    main.append(sec);
+  }
+
+  const sec = el('section');
+  sec.append(el('h2', '', 'Área de teste'));
+  const cartao = el('div', 'cartao');
+  const grade = el('div', 'grade');
+  for (const [cursor, glifo, nome] of TESTES) {
+    const t = el('div', 'ladrilho', `<b>${glifo}</b>${nome}`);
+    t.style.cursor = cursor;
+    grade.append(t);
+  }
+  cartao.append(grade, el('div', 'pista', '<span>Mova o mouse rápido por aqui</span>'));
+  sec.append(cartao, el('p', 'rodape', 'Passe o mouse nos quadrados para ver cada forma. As mudanças acima valem na hora.'));
+  main.append(sec);
+
+  const acoes = el('div', 'acoes');
+  const registro = el('button', 'botao', 'Abrir registro');
+  registro.onclick = () => api('/api/registro', '').catch(desconectado);
+  acoes.append(registro);
+  main.append(acoes);
+  main.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
+}
+
+function linha(l) {
+  const d = el('div', 'linha');
+  if (l.tipo === 'estilo') {
+    const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
+    cab.append(botaoVolta('estilo'));
+    d.append(cab);
+    const seg = el('div', 'segmentado');
+    seg.innerHTML = `<div class="pilula"></div>
+      <button data-v="apple">${seta('#0b0b0d', '#fff', 3.2)}Escuro</button>
+      <button data-v="claro">${seta('#fff', '#000', 2.6)}Claro</button>`;
+    seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+      cfg.estilo = b.dataset.v; seg.dataset.v = b.dataset.v; enviar(); diferencas();
+    });
+    controles.estilo = { definir: v => seg.dataset.v = v };
+    d.append(seg);
+  } else if (l.tipo === 'chave') {
+    const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
+    const lab = el('label', 'chave', `<input type="checkbox"><span></span>`);
+    const cx = lab.querySelector('input');
+    cx.setAttribute('aria-label', l.nome);
+    cx.onchange = () => {
+      if (l.fora) { api('/api/iniciar', cx.checked ? 'sim' : 'nao').then(estadoGeral).catch(desconectado); return; }
+      cfg[l.id] = cx.checked; enviar(); diferencas();
+    };
+    const direita = el('div', 'direita');
+    if (!l.fora) direita.append(botaoVolta(l.id));
+    direita.append(lab);
+    cab.append(direita);
+    d.append(cab);
+    if (l.legenda) d.append(el('div', 'legenda', l.legenda));
+    controles[l.id] = { definir: v => cx.checked = !!v };
+  } else {
+    const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
+    const valor = el('span', 'valor');
+    const direita = el('div', 'direita');
+    direita.append(botaoVolta(l.id), valor);
+    cab.append(direita);
+    d.append(cab);
+    if (l.legenda) d.append(el('div', 'legenda', l.legenda));
+    const r = el('input');
+    Object.assign(r, { type: 'range', min: l.min, max: l.max, step: l.passo });
+    r.setAttribute('aria-label', l.nome);
+    const pintar = v => {
+      valor.textContent = l.fmt(v);
+      r.style.setProperty('--p', ((v - l.min) / (l.max - l.min) * 100) + '%');
+    };
+    r.oninput = () => {
+      ultimoToque = Date.now();
+      cfg[l.id] = parseFloat(r.value); pintar(cfg[l.id]); enviar(); diferencas();
+    };
+    d.append(r);
+    controles[l.id] = {
+      definir: v => { r.value = v; pintar(v); },
+      marcarPadrao: v => r.style.setProperty('--d', ((v - l.min) / (l.max - l.min) * 100) + '%'),
+    };
+  }
+  return d;
+}
+
+function preencher(c) {
+  cfg = { ...c };
+  for (const [k, v] of Object.entries(cfg)) controles[k]?.definir(v);
+  diferencas();
+}
+
+// Botão ↺ que aparece ao lado de um ajuste quando ele está diferente do padrão.
+const voltas = {};
+function botaoVolta(id) {
+  const b = el('button', 'volta', '↺ padrão');
+  b.title = 'Voltar este ajuste ao padrão';
+  b.onclick = () => {
+    if (!padrao) return;
+    cfg[id] = padrao[id];
+    controles[id]?.definir(padrao[id]);
+    enviar(); diferencas();
+  };
+  voltas[id] = b;
+  return b;
+}
+
+const igual = (a, b) => typeof a === 'number' ? Math.abs(a - b) < 1e-6 : a === b;
+function diferencas() {
+  if (!padrao || !cfg) return;
+  let n = 0;
+  for (const [id, b] of Object.entries(voltas)) {
+    const dif = !igual(cfg[id], padrao[id]);
+    b.classList.toggle('visivel', dif);
+    if (dif) n++;
+  }
+  document.getElementById('resumo').textContent =
+    n === 0 ? 'Tudo no padrão do FlowCursor' : n === 1 ? '1 ajuste diferente do padrão' : `${n} ajustes diferentes do padrão`;
+  const botao = document.getElementById('restaurar');
+  if (!botao.dataset.confirmar) botao.disabled = n === 0;
+}
+
+function estadoGeral(e) {
+  conectado();
+  if (e.padrao && !padrao) {
+    padrao = e.padrao;
+    for (const [k, v] of Object.entries(padrao)) controles[k]?.marcarPadrao?.(v);
+    diferencas();
+  }
+  document.getElementById('ativo').checked = e.ativo;
+  controles.iniciar.definir(e.iniciar);
+  document.getElementById('status').innerHTML = e.ativo
+    ? '<b>Ativo</b> · as mudanças valem na hora'
+    : '<b class="pausado">Pausado</b> · ponteiro normal do Windows';
+  document.getElementById('versao').textContent = 'versão ' + e.versao;
+}
+
+// Envia a configuração inteira; se mudar de novo durante o envio, manda só a última.
+let emVoo = false, sujo = false;
+async function enviar() {
+  sujo = true;
+  if (emVoo) return;
+  emVoo = true;
+  while (sujo) {
+    sujo = false;
+    const texto = Object.entries(cfg).map(([k, v]) => `${k} = ${v === true ? 'sim' : v === false ? 'nao' : v}`).join('\n');
+    try { estadoGeral(await api('/api/config', texto)); } catch { desconectado(); break; }
+  }
+  emVoo = false;
+}
+
+function confirmarPadrao(b) {
+  if (b.dataset.confirmar) {
+    delete b.dataset.confirmar;
+    b.classList.remove('confirmar');
+    b.textContent = '↺ Restaurar padrões';
+    api('/api/padrao', '').then(e => { preencher(e.config); estadoGeral(e); }).catch(desconectado);
+    return;
+  }
+  b.dataset.confirmar = '1';
+  b.classList.add('confirmar');
+  b.textContent = 'Toque de novo para confirmar';
+  setTimeout(() => {
+    if (b.dataset.confirmar) { delete b.dataset.confirmar; b.classList.remove('confirmar'); b.textContent = '↺ Restaurar padrões'; diferencas(); }
+  }, 3000);
+}
+
+function conectado() {
+  document.body.classList.remove('desligado');
+  document.getElementById('aviso').hidden = true;
+}
+function desconectado() {
+  document.body.classList.add('desligado');
+  document.getElementById('aviso').hidden = false;
+  document.getElementById('status').textContent = 'Sem conexão com o FlowCursor';
+}
+
+document.getElementById('ativo').onchange = e =>
+  api('/api/ativo', e.target.checked ? 'sim' : 'nao').then(estadoGeral).catch(desconectado);
+
+addEventListener('scroll', () => document.getElementById('topo').classList.toggle('rolado', scrollY > 4), { passive: true });
+
+// Pausa pelo atalho ou mudança feita direto no .ini aparecem aqui também.
+async function atualizar(inicial) {
+  try {
+    const e = await api('/api/estado');
+    estadoGeral(e);
+    const mexendo = Date.now() - ultimoToque < 1500 || emVoo;
+    if (inicial || (!mexendo && JSON.stringify(e.config) !== JSON.stringify(cfg))) preencher(e.config);
+  } catch { desconectado(); }
+}
+
+montar();
+atualizar(true);
+setInterval(atualizar, 2000);
+</script>
+</body>
+</html>

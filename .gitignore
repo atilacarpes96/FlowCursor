@@ -1,0 +1,10 @@
+# compilação e instalador (o instalador vai pelo Drive)
+/target/
+/dist/
+/FlowCursor.exe
+/flowcursor.ico
+
+# coisas de cada PC: ajustes, registro e o perfil da janela de ajustes
+/flowcursor.ini
+/flowcursor.log
+/.janela/
