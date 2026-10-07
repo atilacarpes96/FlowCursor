@@ -47,6 +47,8 @@ verdade do Windows, que aparece mesmo com o painel sem foco):
 
 - um cartão por aplicativo (o usado por último primeiro) com as janelas em miniaturas quadradas
   ao vivo, todas do mesmo tamanho, com a imagem recortada a partir do canto de cima à esquerda;
+- cada cartão leva a cor do ícone do aplicativo (ícone sem cor deixa o cartão neutro), com o
+  ícone grande e o nome em destaque no cabeçalho, para achar o app mesmo com miniaturas parecidas;
 - parar o mouse sobre uma miniatura abre a prévia da janela inteira por cima das outras (que
   recuam um pouco), com o título embaixo; a prévia não amplia além do tamanho real da janela;
 - a seleção é um anel na cor de destaque do Windows, numa camada própria por cima das

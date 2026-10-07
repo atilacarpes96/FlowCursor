@@ -19,6 +19,8 @@ const ATRASO_MOSTRAR: Duration = Duration::from_millis(90);
 const ESPERA_PREVIA: Duration = Duration::from_millis(140);
 /// Miniaturas por linha dentro de um cartão.
 const COLUNAS_MAX: usize = 4;
+/// Altura do cabeçalho de cada cartão (ícone e nome do aplicativo), em px a 100%.
+const CABECALHO: f32 = 46.0;
 
 // ---------- Geometria e molas ----------
 
@@ -309,6 +311,8 @@ struct Rotulo {
     semi: bool,
     cor: u32,
     alinhar: i32,
+    /// cor da sombra de 1 px embaixo do texto (0 = sem sombra)
+    sombra: u32,
 }
 
 impl Texto {
@@ -374,9 +378,16 @@ impl Texto {
             for r in rotulos {
                 let mut fonte: *mut c_void = null_mut();
                 GdipCreateFont(if r.semi { self.semi } else { self.normal }, r.tam, FONT_REGULAR, UNIT_PIXEL, &mut fonte);
+                let t = r.texto.encode_utf16().collect::<Vec<u16>>();
+                if r.sombra != 0 {
+                    let mut pincel: *mut c_void = null_mut();
+                    GdipCreateSolidFill(r.sombra, &mut pincel);
+                    let caixa = RectF { x: r.r.x, y: r.r.y + (r.tam / 14.0).max(1.0), w: r.r.w, h: r.r.h };
+                    GdipDrawString(g, t.as_ptr(), t.len() as i32, fonte, &caixa, self.formato(r.alinhar), pincel);
+                    GdipDeleteBrush(pincel);
+                }
                 let mut pincel: *mut c_void = null_mut();
                 GdipCreateSolidFill(r.cor, &mut pincel);
-                let t = r.texto.encode_utf16().collect::<Vec<u16>>();
                 let caixa = RectF { x: r.r.x, y: r.r.y, w: r.r.w, h: r.r.h };
                 GdipDrawString(g, t.as_ptr(), t.len() as i32, fonte, &caixa, self.formato(r.alinhar), pincel);
                 GdipDeleteBrush(pincel);
@@ -430,6 +441,12 @@ struct Tema {
     cartao_borda: [f32; 4],
     vaga: [f32; 4],
     etiqueta: [f32; 4],
+    /// véu, brilho do cabeçalho e borda dos cartões na cor do ícone do app
+    tinta_cartao: f32,
+    tinta_cabecalho: f32,
+    tinta_borda: f32,
+    /// sombra do nome do app (legibilidade no vidro)
+    sombra_texto: u32,
     texto: u32,
     texto2: u32,
     texto3: u32,
@@ -448,6 +465,10 @@ fn tema(escuro: bool, destaque: [f32; 3]) -> Tema {
             cartao_borda: [1.0, 1.0, 1.0, 0.11],
             vaga: [0.0, 0.0, 0.0, 0.22],
             etiqueta: [0.07, 0.07, 0.09, 0.78],
+            tinta_cartao: 0.07,
+            tinta_cabecalho: 0.17,
+            tinta_borda: 0.30,
+            sombra_texto: 0x8C00_0000,
             texto: 0xFFF5F5F7,
             texto2: 0xD9E6E6EB,
             texto3: 0x8CE6E6EB,
@@ -463,6 +484,10 @@ fn tema(escuro: bool, destaque: [f32; 3]) -> Tema {
             cartao_borda: [1.0, 1.0, 1.0, 0.7],
             vaga: [0.0, 0.0, 0.0, 0.06],
             etiqueta: [0.98, 0.98, 0.99, 0.85],
+            tinta_cartao: 0.10,
+            tinta_cabecalho: 0.20,
+            tinta_borda: 0.55,
+            sombra_texto: 0x99FF_FFFF,
             texto: 0xFF111114,
             texto2: 0xD92C2C30,
             texto3: 0x993C3C43,
@@ -499,6 +524,73 @@ fn cor_destaque() -> [f32; 3] {
         }
         [0.04, 0.52, 1.0]
     }
+}
+
+fn hsv_para_rgb(h: f32, s: f32, v: f32) -> [f32; 3] {
+    let h6 = (h.rem_euclid(1.0)) * 6.0;
+    let c = v * s;
+    let x = c * (1.0 - ((h6 % 2.0) - 1.0).abs());
+    let (r, g, b) = match h6 as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    [r + m, g + m, b + m]
+}
+
+/// Cor que representa o ícone do aplicativo: o matiz mais presente entre os pixels
+/// coloridos, clareado para servir de tinta no vidro. `None` para ícone sem cor
+/// (cinza, branco ou preto), que fica com o cartão neutro.
+fn cor_do_icone(icone: HANDLE) -> Option<[f32; 3]> {
+    if icone == 0 {
+        return None;
+    }
+    let n = 32usize;
+    let mut px = vec![0u32; n * n];
+    Tela { px: &mut px, w: n, h: n, recorte: Ret { x: 0.0, y: 0.0, w: n as f32, h: n as f32 } }.icone(icone, 0.0, 0.0, n as f32);
+    // 12 faixas de matiz: soma de matiz (como vetor, para o vermelho não se partir), saturação e peso
+    let mut faixas = [[0.0f32; 4]; 12];
+    let mut opacos = 0.0f32;
+    for &c in &px {
+        let [r, g, b, a] = desempacotar(c);
+        if a < 0.5 {
+            continue;
+        }
+        opacos += 1.0;
+        let (r, g, b) = (r / a, g / a, b / a);
+        let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+        let sat = if max > 0.0 { (max - min) / max } else { 0.0 };
+        if sat < 0.25 || max < 0.2 {
+            continue;
+        }
+        let d = max - min;
+        let h = if max == r {
+            ((g - b) / d).rem_euclid(6.0)
+        } else if max == g {
+            (b - r) / d + 2.0
+        } else {
+            (r - g) / d + 4.0
+        } / 6.0;
+        let peso = a * sat * max;
+        let f = &mut faixas[((h * 12.0) as usize).min(11)];
+        let ang = h * std::f32::consts::TAU;
+        f[0] += ang.cos() * peso;
+        f[1] += ang.sin() * peso;
+        f[2] += sat * peso;
+        f[3] += peso;
+    }
+    let coloridos: f32 = faixas.iter().map(|f| f[3]).sum();
+    if opacos < 1.0 || coloridos < 0.08 * opacos {
+        return None;
+    }
+    let f = faixas.iter().max_by(|a, b| a[3].total_cmp(&b[3]))?;
+    let h = f[1].atan2(f[0]) / std::f32::consts::TAU;
+    let s = (f[2] / f[3]).clamp(0.4, 0.75);
+    Some(hsv_para_rgb(h, s, 1.0))
 }
 
 /// Vidro: o desfoque com acrílico do Windows. O acrílico do Windows 11 (DWMSBT) vira cor
@@ -708,6 +800,8 @@ pub struct Painel {
     tema: Tema,
     texto: Option<Texto>,
     realce: Option<Realce>,
+    /// cor de cada ícone de app (calcular é barato, mas a busca redesenha a cada tecla)
+    cores: std::collections::HashMap<HANDLE, Option<[f32; 3]>>,
     pub itens: Vec<Item>,
     grupos: Vec<Grupo>,
     pub sel: usize,
@@ -794,6 +888,7 @@ impl Painel {
                 tema,
                 texto: Texto::novo(),
                 realce: Realce::criar(hwnd),
+                cores: std::collections::HashMap::new(),
                 itens: Vec::new(),
                 grupos: Vec::new(),
                 sel: 0,
@@ -984,7 +1079,7 @@ impl Painel {
     fn organizar(&mut self, dimensionar: bool) -> bool {
         let s = self.escala;
         let (margem, topo, rodape) = (22.0 * s, 70.0 * s, 22.0 * s);
-        let (pad, cab, folga, folga_g, titulo) = (14.0 * s, 40.0 * s, 12.0 * s, 14.0 * s, 26.0 * s);
+        let (pad, cab, folga, folga_g, titulo) = (14.0 * s, CABECALHO * s, 12.0 * s, 14.0 * s, 26.0 * s);
         let (largura_max, altura_max) = if dimensionar {
             (self.monitor.w * 0.9 - 2.0 * margem, self.monitor.h * 0.86 - topo - rodape)
         } else {
@@ -1098,6 +1193,8 @@ impl Painel {
         let tinta = empacotar([tema.tinta[0] * tema.tinta[3], tema.tinta[1] * tema.tinta[3], tema.tinta[2] * tema.tinta[3], tema.tinta[3]]);
         self.base.fill(tinta);
         let mut rotulos: Vec<Rotulo> = Vec::new();
+        let cache = &mut self.cores;
+        let cores: Vec<Option<[f32; 3]>> = self.grupos.iter().map(|g| *cache.entry(g.icone).or_insert_with(|| cor_do_icone(g.icone))).collect();
         {
             let mut tela = Tela { px: &mut self.base, w, h, recorte: todo };
             // vidro: brilho que desce do topo e borda iluminada
@@ -1113,33 +1210,43 @@ impl Painel {
             } else {
                 (format!("{}   ·   {}", self.filtro, if n_vis == 0 { "nada".to_string() } else { n_vis.to_string() }), tema.texto)
             };
-            rotulos.push(Rotulo { texto: format!("⌕  {texto_busca}"), r: self.busca.crescer(-10.0 * s), tam: 14.0 * s, semi: false, cor: cor_busca, alinhar: STRING_ALIGN_CENTER });
+            rotulos.push(Rotulo { texto: format!("⌕  {texto_busca}"), r: self.busca.crescer(-10.0 * s), tam: 14.0 * s, semi: false, cor: cor_busca, alinhar: STRING_ALIGN_CENTER, sombra: 0 });
 
-            for g in &self.grupos {
-                tela.preencher(g.ret, 16.0 * s, tema.cartao);
-                tela.contornar_iluminado(g.ret, 16.0 * s, 1.0 * s, tema.cartao_borda, 0.45);
-                let lado = 18.0 * s;
-                let (xi, yc) = (g.ret.x + 14.0 * s, g.ret.y + 20.0 * s);
+            for (g, cor) in self.grupos.iter().zip(&cores) {
+                let raio = 16.0 * s;
+                match cor {
+                    // cartão na cor do ícone: véu leve no cartão inteiro, mais forte no cabeçalho
+                    Some(c) => {
+                        tela.preencher(g.ret, raio, [c[0], c[1], c[2], tema.tinta_cartao]);
+                        tela.brilho(g.ret, raio, [c[0], c[1], c[2], tema.tinta_cabecalho], (CABECALHO * 1.5 * s / g.ret.h).min(0.7));
+                        let borda = [0.5 + c[0] * 0.5, 0.5 + c[1] * 0.5, 0.5 + c[2] * 0.5, tema.tinta_borda];
+                        tela.contornar_iluminado(g.ret, raio, 1.0 * s, borda, 0.4);
+                    }
+                    None => {
+                        tela.preencher(g.ret, raio, tema.cartao);
+                        tela.contornar_iluminado(g.ret, raio, 1.0 * s, tema.cartao_borda, 0.45);
+                    }
+                }
+                let lado = 26.0 * s;
+                let (xi, yc) = (g.ret.x + 14.0 * s, g.ret.y + CABECALHO * s / 2.0 + 1.0 * s);
                 tela.icone(g.icone, xi, yc - lado / 2.0, lado);
-                let contagem = if g.n > 1 { 28.0 * s } else { 0.0 };
-                let xt = xi + lado + 9.0 * s;
+                let contagem = if g.n > 1 { 30.0 * s } else { 0.0 };
+                let xt = xi + lado + 10.0 * s;
                 rotulos.push(Rotulo {
                     texto: g.app.clone(),
-                    r: Ret { x: xt, y: yc - 12.0 * s, w: g.ret.x + g.ret.w - 14.0 * s - contagem - xt, h: 24.0 * s },
-                    tam: 13.0 * s,
+                    r: Ret { x: xt, y: yc - 13.0 * s, w: g.ret.x + g.ret.w - 14.0 * s - contagem - xt, h: 26.0 * s },
+                    tam: 14.5 * s,
                     semi: true,
-                    cor: tema.texto2,
+                    cor: tema.texto,
                     alinhar: STRING_ALIGN_NEAR,
+                    sombra: tema.sombra_texto,
                 });
                 if g.n > 1 {
-                    rotulos.push(Rotulo {
-                        texto: g.n.to_string(),
-                        r: Ret { x: g.ret.x + g.ret.w - 14.0 * s - contagem, y: yc - 12.0 * s, w: contagem, h: 24.0 * s },
-                        tam: 12.0 * s,
-                        semi: false,
-                        cor: tema.texto3,
-                        alinhar: STRING_ALIGN_FAR,
-                    });
+                    // quantas janelas, numa pílula na cor do cartão
+                    let p = Ret { x: g.ret.x + g.ret.w - 12.0 * s - 24.0 * s, y: yc - 10.0 * s, w: 24.0 * s, h: 20.0 * s };
+                    let c = cor.unwrap_or([1.0, 1.0, 1.0]);
+                    tela.preencher(p, 10.0 * s, [c[0], c[1], c[2], tema.tinta_cabecalho * 1.4]);
+                    rotulos.push(Rotulo { texto: g.n.to_string(), r: p, tam: 12.0 * s, semi: true, cor: tema.texto2, alinhar: STRING_ALIGN_CENTER, sombra: 0 });
                 }
             }
             for item in self.itens.iter().filter(|i| i.visivel) {
@@ -1158,7 +1265,7 @@ impl Painel {
                             tam: 11.0 * s,
                             semi: false,
                             cor: tema.texto3,
-                            alinhar: STRING_ALIGN_CENTER,
+                            alinhar: STRING_ALIGN_CENTER, sombra: 0,
                         });
                     }
                 }
@@ -1168,7 +1275,7 @@ impl Painel {
                     tam: 11.5 * s,
                     semi: false,
                     cor: tema.texto2,
-                    alinhar: STRING_ALIGN_CENTER,
+                    alinhar: STRING_ALIGN_CENTER, sombra: 0,
                 });
             }
             if n_vis == 0 {
@@ -1178,7 +1285,7 @@ impl Painel {
                     tam: 15.0 * s,
                     semi: false,
                     cor: tema.texto2,
-                    alinhar: STRING_ALIGN_CENTER,
+                    alinhar: STRING_ALIGN_CENTER, sombra: 0,
                 });
             }
         }
@@ -1391,7 +1498,7 @@ impl Painel {
                         tam,
                         semi: false,
                         cor: com_alfa(self.tema.texto, a),
-                        alinhar: STRING_ALIGN_CENTER,
+                        alinhar: STRING_ALIGN_CENTER, sombra: 0,
                     });
                 }
             }
