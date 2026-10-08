@@ -94,7 +94,7 @@ desativar_tela_cheia = sim  # jogos e videos em tela cheia usam o ponteiro norma
 # Alt+Tab
 alternador = sim          # Alt+Tab do FlowCursor: miniaturas ao vivo agrupadas por aplicativo
 alttab_transparencia = 85 # 0 a 100. Quanto do fundo aparece atras do vidro do painel
-alttab_fosco = 50         # 0 a 100. 0 vidro limpo (sem desfoque), 100 bem fosco e leitoso
+alttab_fosco = 50         # 0 a 100. ate 25 vidro limpo (sem desfoque), 100 bem fosco e leitoso
 alttab_cor = 50           # 0 a 100. Cor do icone no topo de cada cartao (0 desliga)
 alttab_tamanho = 60       # 0 a 100. Tamanho das miniaturas; ate 20 mostra uma lista com o nome inteiro
 alttab_painel = 90        # 40 a 100. Quanto da tela o painel pode ocupar (%)

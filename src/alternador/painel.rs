@@ -22,6 +22,9 @@ const COLUNAS_MAX: usize = 4;
 /// Altura do cabeçalho de cada cartão (ícone e nome do aplicativo), em px a 100%.
 const CABECALHO: f32 = 50.0;
 /// Ajuste de tamanho (0 a 1) até onde o painel mostra uma lista em vez de miniaturas.
+/// Fosco abaixo disso é vidro limpo (sem desfoque); a partir de VIDRO_ACRILICO, acrílico.
+const VIDRO_LIMPO: f32 = 0.25;
+const VIDRO_ACRILICO: f32 = 0.65;
 const LIMITE_LISTA: f32 = 0.2;
 
 // ---------- Geometria e molas ----------
@@ -466,7 +469,9 @@ struct Tema {
     acento: u32,
     /// tipo de vidro do Windows: limpo, desfoque ou acrílico
     estado_vidro: u32,
-    /// véu por cima do desfoque: dá o fosco
+    /// véu de cor do vidro limpo (sem desfoque, o acento do Windows não entra)
+    veu: [f32; 4],
+    /// véu branco por cima do desfoque: dá o fosco
     tinta: [f32; 4],
     brilho: [f32; 4],
     borda: [f32; 4],
@@ -484,31 +489,42 @@ struct Tema {
     destaque: [f32; 4],
 }
 
-/// Os ajustes chegam de 0 a 1. `transparencia`: quanto do fundo aparece (o véu de cor do
-/// vidro some). `fosco`: de vidro limpo (sem desfoque) a desfoque, acrílico e, no fim,
-/// leitoso. `cor`: tom do ícone no topo dos cartões (0,5 é o padrão).
+/// Os ajustes chegam de 0 a 1. `transparencia`: quanto do fundo aparece (o véu escuro
+/// do vidro some; em 100% fica só a borda iluminada, como o Liquid Glass "Clear").
+/// `fosco`: até VIDRO_LIMPO é vidro limpo, sem desfoque; depois desfoque e, a partir de
+/// VIDRO_ACRILICO, acrílico com um véu branco que deixa o painel leitoso no fim.
+/// `cor`: tom do ícone no topo dos cartões (0,5 é o padrão).
 fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f32) -> Tema {
     let d = [destaque[0], destaque[1], destaque[2], 1.0];
     let cor = cor * 2.0;
+    let fosco = fosco.clamp(0.0, 1.0);
     let opaco = (1.0 - transparencia.clamp(0.0, 1.0)).powf(1.3);
-    let estado_vidro = if fosco < 0.08 {
-        ACCENT_ENABLE_TRANSPARENTGRADIENT
-    } else if fosco < 0.35 {
+    // O gradiente transparente do Windows (estado 2) sai opaco; o vidro limpo é a janela
+    // sem acento nenhum, com o próprio canal alfa do painel por cima do que estiver atrás.
+    let limpo = fosco < VIDRO_LIMPO;
+    let estado_vidro = if limpo {
+        ACCENT_DISABLED
+    } else if fosco < VIDRO_ACRILICO {
         ACCENT_ENABLE_BLURBEHIND
     } else {
         ACCENT_ENABLE_ACRYLICBLURBEHIND
     };
     let acento = |base: u32, alfa: f32| (((alfa.clamp(0.0, 0.94) * 255.0) as u32) << 24) | (base & 0xFF_FFFF);
+    // véu de cor desenhado pelo próprio painel: no vidro limpo faz o papel do acento
+    let veu = |base: [f32; 3], alfa: f32| [base[0], base[1], base[2], if limpo { alfa.clamp(0.0, 0.94) } else { 0.0 }];
+    // em 100% de transparência os cartões quase somem e sobra o contorno
+    let leve = 0.35 + 0.65 * opaco;
     if escuro {
         Tema {
-            acento: acento(0x1414_14, opaco * 0.75),
+            acento: acento(0x1414_14, if limpo { 0.0 } else { opaco * 0.75 }),
             estado_vidro,
+            veu: veu([0.08, 0.08, 0.08], 0.05 + opaco * 0.8),
             tinta: [1.0, 1.0, 1.0, 0.14 * fosco * fosco],
             brilho: [1.0, 1.0, 1.0, 0.075],
-            borda: [1.0, 1.0, 1.0, 0.26],
-            cartao: [1.0, 1.0, 1.0, 0.045],
-            cartao_borda: [1.0, 1.0, 1.0, 0.11],
-            vaga: [0.0, 0.0, 0.0, 0.22],
+            borda: [1.0, 1.0, 1.0, 0.26 + 0.1 * (1.0 - opaco)],
+            cartao: [1.0, 1.0, 1.0, 0.045 * leve.max(0.6)],
+            cartao_borda: [1.0, 1.0, 1.0, 0.11 + 0.05 * (1.0 - opaco)],
+            vaga: [0.0, 0.0, 0.0, 0.22 * leve],
             etiqueta: [0.07, 0.07, 0.09, 0.78],
             tinta_cabecalho: 0.13 * cor,
             sombra_texto: 0x8C00_0000,
@@ -519,12 +535,13 @@ fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f
         }
     } else {
         Tema {
-            acento: acento(0xF2F2_F2, opaco * 2.9),
+            acento: acento(0xF2F2_F2, if limpo { 0.0 } else { opaco * 2.9 }),
             estado_vidro,
+            veu: veu([0.95, 0.95, 0.95], 0.06 + opaco * 2.0),
             tinta: [1.0, 1.0, 1.0, 0.88 * fosco * fosco],
-            brilho: [1.0, 1.0, 1.0, 0.30],
+            brilho: [1.0, 1.0, 1.0, 0.30 * leve],
             borda: [1.0, 1.0, 1.0, 0.85],
-            cartao: [1.0, 1.0, 1.0, 0.34],
+            cartao: [1.0, 1.0, 1.0, 0.34 * leve],
             cartao_borda: [1.0, 1.0, 1.0, 0.7],
             vaga: [0.0, 0.0, 0.0, 0.06],
             etiqueta: [0.98, 0.98, 0.99, 0.85],
@@ -1366,8 +1383,10 @@ impl Painel {
         let (w, h) = (self.w, self.h);
         let tema = &self.tema;
         let todo = Ret { x: 0.0, y: 0.0, w: w as f32, h: h as f32 };
-        let tinta = empacotar([tema.tinta[0] * tema.tinta[3], tema.tinta[1] * tema.tinta[3], tema.tinta[2] * tema.tinta[3], tema.tinta[3]]);
-        self.base.fill(tinta);
+        // fundo: véu de cor e, por cima, o branco do fosco (pré-multiplicado)
+        let (v, t) = (tema.veu, tema.tinta);
+        let fundo = [0, 1, 2].map(|k| t[k] * t[3] + v[k] * v[3] * (1.0 - t[3]));
+        self.base.fill(empacotar([fundo[0], fundo[1], fundo[2], t[3] + v[3] * (1.0 - t[3])]));
         let mut rotulos: Vec<Rotulo> = Vec::new();
         let cache = &mut self.cores;
         let cores: Vec<Option<[f32; 3]>> = self.grupos.iter().map(|g| *cache.entry(g.icone).or_insert_with(|| cor_do_icone(g.icone))).collect();
