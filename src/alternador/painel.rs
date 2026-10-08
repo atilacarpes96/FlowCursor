@@ -214,6 +214,26 @@ impl Tela<'_> {
         }
     }
 
+    /// Um "X" de traço `larg`, com braços de `meio` a partir do centro `c`.
+    fn xis(&mut self, c: V2, meio: f32, larg: f32, cor: [f32; 4]) {
+        let r = Ret { x: c.x - meio, y: c.y - meio, w: 2.0 * meio, h: 2.0 * meio };
+        let (x0, y0, x1, y1) = self.faixa(r, larg + 1.0);
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let (px, py) = (x as f32 + 0.5 - c.x, y as f32 + 0.5 - c.y);
+                // distância até cada diagonal (segmentos de -meio a +meio)
+                let t1 = ((px + py) / 2.0).clamp(-meio, meio);
+                let t2 = ((px - py) / 2.0).clamp(-meio, meio);
+                let d1 = ((px - t1).powi(2) + (py - t1).powi(2)).sqrt();
+                let d2 = ((px - t2).powi(2) + (py + t2).powi(2)).sqrt();
+                let cob = (0.5 - (d1.min(d2) - larg / 2.0)).clamp(0.0, 1.0);
+                if cob > 0.0 {
+                    misturar(&mut self.px[y * self.w + x], cor, cob);
+                }
+            }
+        }
+    }
+
     fn preencher(&mut self, r: Ret, raio: f32, cor: [f32; 4]) {
         self.forma(r, raio, 1.0, cor, |d, _| (0.5 - d).clamp(0.0, 1.0));
     }
@@ -660,6 +680,24 @@ fn aplicar_vidro(hwnd: HWND, cor: u32, estado: u32) {
     unsafe { SetWindowCompositionAttribute(hwnd, &mut dados) };
 }
 
+/// Botão de fechar da barra de título (46x32 no Windows 11, a 100%), em pixels relativos
+/// ao canto da janela: o retângulo visível dela fica dentro das bordas invisíveis.
+fn xis_da_janela(h: HWND) -> Option<Ret> {
+    unsafe {
+        let mut janela = RECT::default();
+        let mut visivel = RECT::default();
+        if GetWindowRect(h, &mut janela) == 0 {
+            return None;
+        }
+        if DwmGetWindowAttribute(h, DWMWA_EXTENDED_FRAME_BOUNDS, (&mut visivel as *mut RECT).cast(), std::mem::size_of::<RECT>() as u32) != 0 {
+            visivel = janela;
+        }
+        let k = GetDpiForWindow(h).max(96) as f32 / 96.0;
+        let (w, h) = (46.0 * k, 32.0 * k);
+        Some(Ret { x: (visivel.right - janela.left) as f32 - w, y: (visivel.top - janela.top) as f32, w, h })
+    }
+}
+
 /// Tira acentos e caixa para a busca: "Configurações" casa com "configur".
 pub fn normalizar(s: &str) -> String {
     s.chars()
@@ -830,6 +868,8 @@ pub struct Item {
     thumb: isize,
     /// tamanho da janela de origem, em pixels (0 se não deu para saber)
     fonte: (f32, f32),
+    /// onde fica o botão de fechar da própria janela, em pixels da origem
+    xis: Option<Ret>,
     pub visivel: bool,
 }
 
@@ -842,6 +882,8 @@ struct Grupo {
 
 pub enum Clique {
     Item,
+    /// no botão de fechar da janela (o "X" sobre a prévia ou na linha da lista)
+    Fechar,
     Nada,
 }
 
@@ -889,6 +931,8 @@ pub struct Painel {
     lista_t: f32,
     /// largura da coluna com o nome dos apps na lista
     lista_app_w: f32,
+    /// ponteiro sobre o botão de fechar
+    sobre_xis: bool,
     /// dos ajustes, de 0 a 1: tamanho das miniaturas e parte da tela que o painel pode ocupar
     pref_tamanho: f32,
     pref_painel: f32,
@@ -981,6 +1025,7 @@ impl Painel {
                 lista: false,
                 lista_t: 1.0,
                 lista_app_w: 120.0,
+                sobre_xis: false,
                 pref_tamanho: 0.6,
                 pref_painel: 0.9,
             })
@@ -1065,6 +1110,7 @@ impl Painel {
                 opac: Mola::em(0.0),
                 thumb: 0,
                 fonte: (0.0, 0.0),
+                xis: None,
                 visivel: true,
             })
             .collect();
@@ -1080,6 +1126,7 @@ impl Painel {
                     if DwmQueryThumbnailSourceSize(t, &mut tam) == 0 && tam.cx > 0 && tam.cy > 0 {
                         item.fonte = (tam.cx as f32, tam.cy as f32);
                     }
+                    item.xis = xis_da_janela(item.janela.hwnd);
                 }
             }
         }
@@ -1553,6 +1600,37 @@ impl Painel {
         (Ret { x: c.x - w / 2.0, y: c.y - h / 2.0, w, h }.dentro_de(&self.limite), Some(fonte.inteiro()))
     }
 
+    /// Botão de fechar visível agora: (item, retângulo, opacidade, redondo). Na grade fica
+    /// por cima do "X" da própria janela, quando a prévia abre; na lista, no fim da faixa
+    /// da seleção; numa janela minimizada (sem prévia), no canto da vaga.
+    fn botao_fechar(&self) -> Option<(usize, Ret, f32, bool)> {
+        let s = self.escala;
+        if self.lista {
+            let an = self.anel_na_tela()?;
+            let lado = (an.h - 10.0 * s).clamp(16.0 * s, 26.0 * s);
+            let m = (an.h - lado) / 2.0;
+            return Some((self.sel, Ret { x: an.x + an.w - lado - m.max(6.0 * s), y: an.y + m, w: lado, h: lado }, 1.0, true));
+        }
+        let i = self.hover.filter(|&i| self.mouse_mexeu && self.itens.get(i).is_some_and(|it| it.visivel))?;
+        let item = &self.itens[i];
+        let (r, fonte) = self.geometria(i);
+        if item.thumb == 0 {
+            let lado = 24.0 * s;
+            return Some((i, Ret { x: r.x + r.w - lado - 6.0 * s, y: r.y + 6.0 * s, w: lado, h: lado }, 1.0, true));
+        }
+        let t = item.abre.x;
+        if t < 0.6 {
+            return None;
+        }
+        let (fonte, xis) = (fonte?, item.xis?);
+        let k = r.w / (fonte.right - fonte.left).max(1) as f32;
+        let b = Ret { x: r.x + xis.x * k, y: r.y + xis.y * k, w: xis.w * k, h: xis.h * k };
+        // pequeno demais para acertar: cresce para a esquerda e para baixo, preso no canto
+        let (w, h) = (b.w.max(34.0 * s), b.h.max(24.0 * s));
+        let b = Ret { x: b.x + b.w - w, y: b.y, w, h }.cortar(&r)?;
+        Some((i, b, smoothstep(0.6, 1.0, t), false))
+    }
+
     /// Anel da seleção: a mola leva o anel de uma miniatura a outra; por cima disso ele
     /// acompanha exatamente o que a miniatura selecionada faz (abrir a prévia, entrar).
     fn anel_na_tela(&self) -> Option<Ret> {
@@ -1671,7 +1749,11 @@ impl Painel {
             .max_by(|&a, &b| self.itens[a].abre.x.total_cmp(&self.itens[b].abre.x))
             .map(|i| (i, self.geometria(i).0, self.itens[i].abre.x.min(1.0)));
         let painel = Ret { x: 0.0, y: 0.0, w: self.w as f32, h: self.h as f32 };
+        let botao = self.botao_fechar();
         let mut area = anel.map(|a| a.crescer(14.0 * s));
+        if let Some((_, b, _, _)) = botao {
+            area = Some(area.map_or(b, |a| a.uniao(&b)));
+        }
         if let Some((_, r, _)) = previa {
             let sombra = Ret { y: r.y + 10.0 * s, ..r }.crescer(32.0 * s).uniao(&r);
             area = Some(area.map_or(sombra, |a| a.uniao(&sombra)));
@@ -1690,6 +1772,9 @@ impl Painel {
         }
         if let Some((i, r, t)) = previa {
             assinatura.extend([i as i32, q(r.x), q(r.y), q(r.w), q(r.h), (t * 500.0) as i32]);
+        }
+        if let Some((i, b, a, _)) = botao {
+            assinatura.extend([i as i32, q(b.x), q(b.y), q(b.w), q(b.h), (a * 100.0) as i32, self.sobre_xis as i32]);
         }
         if assinatura == realce.assinatura && realce.visivel {
             self.realce = Some(realce);
@@ -1740,7 +1825,9 @@ impl Painel {
                     tela.preencher(an, raio, [d[0], d[1], d[2], 0.92]);
                     tela.contornar_iluminado(an.crescer(-0.5), raio, 1.0 * s, [1.0, 1.0, 1.0, 0.35], 0.0);
                     if self.itens.get(self.sel).is_some_and(|i| i.visivel) {
-                        let ((xi, yi, lado), textos) = self.linha_lista(self.sel, an, 0xFFFF_FFFF, 0xE6FF_FFFF, 0);
+                        // o título termina antes do botão de fechar
+                        let curta = Ret { w: an.w - botao.map_or(0.0, |(_, b, _, _)| b.w + 6.0 * s), ..an };
+                        let ((xi, yi, lado), textos) = self.linha_lista(self.sel, curta, 0xFFFF_FFFF, 0xE6FF_FFFF, 0);
                         tela.icone(self.itens[self.sel].janela.icone, xi, yi, lado);
                         rotulos.extend(textos);
                     }
@@ -1748,6 +1835,20 @@ impl Painel {
                     tela.sombra_externa(an, 9.0 * s, 9.0 * s, 0.0, [d[0], d[1], d[2], 0.28]);
                     tela.contornar(an, 9.0 * s, 2.25 * s, d);
                 }
+            }
+            if let Some((_, b, a, redondo)) = botao {
+                let b = desloca(b);
+                let vermelho = [0.77, 0.17, 0.11];
+                if redondo {
+                    // círculo discreto que fica vermelho com o ponteiro em cima
+                    let fundo = if self.sobre_xis { [vermelho[0], vermelho[1], vermelho[2], 0.95 * a] } else { [0.0, 0.0, 0.0, 0.28 * a] };
+                    tela.preencher(b, b.h / 2.0, fundo);
+                    tela.contornar(b, b.h / 2.0, 1.0 * s, [1.0, 1.0, 1.0, 0.25 * a]);
+                } else {
+                    // por cima do "X" da própria janela, como o botão vermelho do Windows
+                    tela.preencher(b, 4.0 * s, [vermelho[0], vermelho[1], vermelho[2], if self.sobre_xis { 1.0 } else { 0.85 } * a]);
+                }
+                tela.xis(b.centro(), (b.h * 0.17).max(3.5 * s), 1.4 * s, [1.0, 1.0, 1.0, a]);
             }
         }
         if let Some(t) = &self.texto {
@@ -1810,9 +1911,16 @@ impl Painel {
                 self.sel = i;
             }
         }
+        self.sobre_xis = self.botao_fechar().is_some_and(|(_, b, a, _)| a > 0.5 && b.contem(x, y));
     }
 
     pub fn clique(&mut self, x: f32, y: f32) -> Clique {
+        if let Some((i, b, a, _)) = self.botao_fechar() {
+            if a > 0.5 && b.contem(x, y) {
+                self.sel = i;
+                return Clique::Fechar;
+            }
+        }
         match self.indice_em(x, y) {
             Some(i) => {
                 self.sel = i;
@@ -1887,6 +1995,7 @@ impl Painel {
             return;
         }
         let item = self.itens.remove(self.sel);
+        self.sobre_xis = false;
         if item.thumb != 0 {
             unsafe { DwmUnregisterThumbnail(item.thumb) };
         }

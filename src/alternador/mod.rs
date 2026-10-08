@@ -228,6 +228,21 @@ fn abrir_com(shift: bool, mascarar: bool) {
     reg!("Alt+Tab: {n} janelas, preparado em {:.0} ms", inicio.elapsed().as_secs_f64() * 1000.0);
 }
 
+/// Pede para a janela selecionada fechar (como o "X" dela) e tira do painel; sem
+/// nenhuma janela sobrando, o painel fecha.
+fn fechar_selecionada() {
+    INTERAGIU.with(|c| c.set(true));
+    com_painel(|p| {
+        if let Some(h) = p.selecionada() {
+            janelas::fechar(h);
+            p.remover_selecionada();
+        }
+    });
+    if com_painel(|p| p.vazio()).unwrap_or(true) {
+        fechar_sem_trocar();
+    }
+}
+
 fn tecla(vk: u32) {
     usou();
     match vk {
@@ -245,15 +260,7 @@ fn tecla(vk: u32) {
         }
         VK_DELETE => {
             INTERAGIU.with(|c| c.set(true));
-            com_painel(|p| {
-                if let Some(h) = p.selecionada() {
-                    janelas::fechar(h);
-                    p.remover_selecionada();
-                }
-            });
-            if com_painel(|p| p.vazio()).unwrap_or(true) {
-                fechar_sem_trocar();
-            }
+            fechar_selecionada();
         }
         VK_BACK => {
             INTERAGIU.with(|c| c.set(true));
@@ -333,8 +340,10 @@ unsafe extern "system" fn procedimento(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM
         }
         WM_LBUTTONUP => {
             let (x, y) = ponto();
-            if let Some(Clique::Item) = com_painel(|p| p.clique(x, y)) {
-                confirmar();
+            match com_painel(|p| p.clique(x, y)) {
+                Some(Clique::Item) => confirmar(),
+                Some(Clique::Fechar) => fechar_selecionada(),
+                _ => {}
             }
             0
         }
@@ -342,17 +351,9 @@ unsafe extern "system" fn procedimento(h: HWND, msg: u32, wp: WPARAM, lp: LPARAM
             // botão do meio fecha a janela, como na barra de tarefas
             let (x, y) = ponto();
             INTERAGIU.with(|c| c.set(true));
-            com_painel(|p| {
-                if let Some(i) = p.indice_sob(x, y) {
-                    p.sel = i;
-                    if let Some(hw) = p.selecionada() {
-                        janelas::fechar(hw);
-                        p.remover_selecionada();
-                    }
-                }
-            });
-            if com_painel(|p| p.vazio()).unwrap_or(false) {
-                fechar_sem_trocar();
+            let sob = com_painel(|p| p.indice_sob(x, y).map(|i| p.sel = i)).flatten();
+            if sob.is_some() {
+                fechar_selecionada();
             }
             0
         }

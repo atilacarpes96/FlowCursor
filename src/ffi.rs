@@ -247,6 +247,7 @@ pub const ULW_ALPHA: u32 = 0x0000_0002;
 pub const AC_SRC_ALPHA: u8 = 0x01;
 pub const DWMWA_TRANSITIONS_FORCEDISABLED: u32 = 3;
 pub const DWMWA_CLOAKED: u32 = 14;
+pub const DWMWA_EXTENDED_FRAME_BOUNDS: u32 = 9;
 
 // Cursores do sistema (os IDC_ têm os mesmos números)
 pub const OCR_NORMAL: u32 = 32512;
@@ -381,6 +382,7 @@ extern "system" {
     pub fn GetForegroundWindow() -> HWND;
     pub fn SetForegroundWindow(h: HWND) -> BOOL;
     pub fn GetWindowRect(h: HWND, r: *mut RECT) -> BOOL;
+    pub fn GetDpiForWindow(h: HWND) -> u32;
     pub fn GetClassNameW(h: HWND, buf: *mut u16, max: i32) -> i32;
     pub fn GetWindowThreadProcessId(h: HWND, pid: *mut u32) -> u32;
     pub fn FindWindowW(class: *const u16, name: *const u16) -> HWND;
