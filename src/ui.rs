@@ -350,7 +350,7 @@ pub fn abrir_janela() {
             let filho = std::process::Command::new(edge)
                 .arg(format!("--app={url}"))
                 .arg(format!("--user-data-dir={}", perfil.display()))
-                .arg("--window-size=520,920")
+                .arg("--window-size=1080,900")
                 .arg("--no-first-run")
                 .arg("--no-default-browser-check")
                 .arg("--disable-features=Translate,msEdgeSidebarV2")

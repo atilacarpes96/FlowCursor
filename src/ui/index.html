@@ -93,7 +93,7 @@ header {
   transition: border-color .2s;
 }
 header.rolado { border-bottom-color: var(--separador); }
-.topo-linha { display: flex; align-items: center; gap: 14px; max-width: 520px; margin: 0 auto; }
+.topo-linha { display: flex; align-items: center; gap: 14px; max-width: 1060px; margin: 0 auto; }
 .app-icone { width: 52px; height: 52px; border-radius: 13px; box-shadow: 0 6px 18px rgba(94, 92, 230, 0.35); }
 .titulos { flex: 1; min-width: 0; }
 h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
@@ -101,7 +101,11 @@ h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 #status b { font-weight: 600; color: var(--verde); }
 #status b.pausado { color: var(--texto-2); }
 
-main { position: relative; z-index: 1; max-width: 520px; margin: 0 auto; padding: 4px 16px 36px; }
+main { position: relative; z-index: 1; max-width: 1060px; margin: 0 auto; padding: 4px 16px 36px; }
+/* duas colunas: o ponteiro à esquerda, o Alt+Tab à direita; estreita, vira uma só */
+.colunas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-items: start; }
+.coluna { min-width: 0; }
+@media (max-width: 860px) { .colunas { grid-template-columns: minmax(0, 1fr); } }
 section { animation: surgir .45s cubic-bezier(.2, .8, .2, 1) both; }
 section:nth-of-type(2) { animation-delay: .04s; }
 section:nth-of-type(3) { animation-delay: .08s; }
@@ -363,12 +367,7 @@ const SECOES = [
     { id: 'clique', tipo: 'chave', nome: 'Encolher ao clicar' },
     { id: 'onda_clique', tipo: 'chave', nome: 'Onda no clique' },
   ]},
-  { titulo: 'Geral', linhas: [
-    { id: 'desativar_tela_cheia', tipo: 'chave', nome: 'Ponteiro normal em tela cheia',
-      legenda: 'Jogos e vídeos em tela cheia usam o ponteiro do Windows.' },
-    { id: 'iniciar', tipo: 'chave', nome: 'Abrir junto com o Windows', fora: true },
-  ]},
-  { titulo: 'Alt+Tab', linhas: [
+  { titulo: 'Alt+Tab', coluna: 'direita', linhas: [
     { id: 'alternador', tipo: 'chave', nome: 'Alt+Tab do FlowCursor',
       legenda: 'Miniaturas ao vivo agrupadas por aplicativo. Pare o mouse sobre uma miniatura para ver a janela inteira; digite para buscar. Desligado, volta o do Windows.' },
     { id: 'alttab_transparencia', nome: 'Transparência', min: 0, max: 100, passo: 1, fmt: pct,
@@ -383,6 +382,11 @@ const SECOES = [
       legenda: 'Até a marca azul o painel é uma lista com o ícone e o nome inteiro de cada janela (no mínimo, compacta como um menu); depois da marca, miniaturas. Com janelas demais para caber, a lista aparece sozinha.' },
     { id: 'alttab_painel', nome: 'Tamanho do painel', min: 40, max: 100, passo: 1,
       fmt: v => pct(v) + ' da tela', legenda: 'Até quanto da tela o painel pode ocupar.' },
+  ]},
+  { titulo: 'Geral', coluna: 'direita', linhas: [
+    { id: 'desativar_tela_cheia', tipo: 'chave', nome: 'Ponteiro normal em tela cheia',
+      legenda: 'Jogos e vídeos em tela cheia usam o ponteiro do Windows.' },
+    { id: 'iniciar', tipo: 'chave', nome: 'Abrir junto com o Windows', fora: true },
   ]},
 ];
 
@@ -405,7 +409,11 @@ function el(tag, classe, html) {
 }
 
 function montar() {
-  const main = document.getElementById('conteudo');
+  const conteudo = document.getElementById('conteudo');
+  const colunas = el('div', 'colunas');
+  const main = el('div', 'coluna');
+  const direita = el('div', 'coluna');
+  colunas.append(main, direita);
   const topo = el('div', 'topo-acoes');
   const resumo = el('span', '', '');
   resumo.id = 'resumo';
@@ -413,7 +421,7 @@ function montar() {
   botao.id = 'restaurar';
   botao.onclick = () => confirmarPadrao(botao);
   topo.append(resumo, botao);
-  main.append(topo);
+  conteudo.append(topo, colunas);
   for (const s of SECOES) {
     const sec = el('section');
     sec.append(el('h2', '', s.titulo));
@@ -421,7 +429,7 @@ function montar() {
     for (const l of s.linhas) cartao.append(linha(l));
     sec.append(cartao);
     if (s.rodape) sec.append(el('p', 'rodape', s.rodape));
-    main.append(sec);
+    (s.coluna === 'direita' ? direita : main).append(sec);
   }
 
   const sec = el('section');
@@ -437,7 +445,7 @@ function montar() {
   sec.append(cartao, el('p', 'rodape', 'Passe o mouse nos quadrados para ver cada forma. As mudanças acima valem na hora.'));
   main.append(sec);
 
-  main.append(secaoAtualizacao());
+  direita.append(secaoAtualizacao());
 
   const acoes = el('div', 'acoes');
   const registro = el('button', 'botao', 'Abrir registro');
@@ -445,8 +453,8 @@ function montar() {
   const verAltTab = el('button', 'botao', 'Ver o Alt+Tab');
   verAltTab.onclick = () => api('/api/alttab', '').catch(desconectado);
   acoes.append(verAltTab, registro);
-  main.append(acoes);
-  main.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
+  direita.append(acoes);
+  direita.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
 }
 
 function secaoAtualizacao() {
