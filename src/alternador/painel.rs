@@ -22,7 +22,7 @@ const COLUNAS_MAX: usize = 4;
 /// Altura do cabeçalho de cada cartão (ícone e nome do aplicativo), em px a 100%.
 const CABECALHO: f32 = 50.0;
 /// Ajuste de tamanho (0 a 1) até onde o painel mostra uma lista em vez de miniaturas.
-const LIMITE_LISTA: f32 = 0.1;
+const LIMITE_LISTA: f32 = 0.2;
 
 // ---------- Geometria e molas ----------
 
@@ -464,6 +464,8 @@ impl Texto {
 struct Tema {
     /// cor do desfoque do Windows (AABBGGRR); quanto menor o alfa, mais transparente
     acento: u32,
+    /// tipo de vidro do Windows: limpo, desfoque ou acrílico
+    estado_vidro: u32,
     /// véu por cima do desfoque: dá o fosco
     tinta: [f32; 4],
     brilho: [f32; 4],
@@ -482,17 +484,26 @@ struct Tema {
     destaque: [f32; 4],
 }
 
-/// osco e cor vêm dos ajustes (0 a 1; 0,5 é o padrão).
-fn tema(escuro: bool, destaque: [f32; 3], fosco: f32, cor: f32) -> Tema {
+/// Os ajustes chegam de 0 a 1. `transparencia`: quanto do fundo aparece (o véu de cor do
+/// vidro some). `fosco`: de vidro limpo (sem desfoque) a desfoque, acrílico e, no fim,
+/// leitoso. `cor`: tom do ícone no topo dos cartões (0,5 é o padrão).
+fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f32) -> Tema {
     let d = [destaque[0], destaque[1], destaque[2], 1.0];
-    // fosco: até a metade vai de transparente ao vidro padrão; depois fica leitoso
-    let k = if fosco < 0.5 { fosco * 2.0 } else { 1.0 + (fosco - 0.5) * 10.0 };
     let cor = cor * 2.0;
-    let acento = |base: u32| ((((base >> 24) as f32 * k).min(192.0) as u32) << 24) | (base & 0xFF_FFFF);
+    let opaco = (1.0 - transparencia.clamp(0.0, 1.0)).powf(1.3);
+    let estado_vidro = if fosco < 0.08 {
+        ACCENT_ENABLE_TRANSPARENTGRADIENT
+    } else if fosco < 0.35 {
+        ACCENT_ENABLE_BLURBEHIND
+    } else {
+        ACCENT_ENABLE_ACRYLICBLURBEHIND
+    };
+    let acento = |base: u32, alfa: f32| (((alfa.clamp(0.0, 0.94) * 255.0) as u32) << 24) | (base & 0xFF_FFFF);
     if escuro {
         Tema {
-            acento: acento(0x1014_1414),
-            tinta: [1.0, 1.0, 1.0, (0.035 * k).min(0.5)],
+            acento: acento(0x1414_14, opaco * 0.75),
+            estado_vidro,
+            tinta: [1.0, 1.0, 1.0, 0.14 * fosco * fosco],
             brilho: [1.0, 1.0, 1.0, 0.075],
             borda: [1.0, 1.0, 1.0, 0.26],
             cartao: [1.0, 1.0, 1.0, 0.045],
@@ -508,8 +519,9 @@ fn tema(escuro: bool, destaque: [f32; 3], fosco: f32, cor: f32) -> Tema {
         }
     } else {
         Tema {
-            acento: acento(0x40F2_F2F2),
-            tinta: [1.0, 1.0, 1.0, (0.22 * k).min(0.7)],
+            acento: acento(0xF2F2_F2, opaco * 2.9),
+            estado_vidro,
+            tinta: [1.0, 1.0, 1.0, 0.88 * fosco * fosco],
             brilho: [1.0, 1.0, 1.0, 0.30],
             borda: [1.0, 1.0, 1.0, 0.85],
             cartao: [1.0, 1.0, 1.0, 0.34],
@@ -525,7 +537,6 @@ fn tema(escuro: bool, destaque: [f32; 3], fosco: f32, cor: f32) -> Tema {
         }
     }
 }
-
 fn tema_escuro() -> bool {
     unsafe {
         let mut chave: HANDLE = 0;
@@ -626,8 +637,8 @@ fn cor_do_icone(icone: HANDLE) -> Option<[f32; 3]> {
 /// Vidro: o desfoque com acrílico do Windows. O acrílico do Windows 11 (DWMSBT) vira cor
 /// sólida em janela que não está ativa, e o painel nunca fica ativo para não tirar o
 /// foco de ninguém; este desfoque não depende disso.
-fn aplicar_vidro(hwnd: HWND, cor: u32) {
-    let mut acento = ACCENT_POLICY { AccentState: ACCENT_ENABLE_ACRYLICBLURBEHIND, AccentFlags: 0, GradientColor: cor, AnimationId: 0 };
+fn aplicar_vidro(hwnd: HWND, cor: u32, estado: u32) {
+    let mut acento = ACCENT_POLICY { AccentState: estado, AccentFlags: 0, GradientColor: cor, AnimationId: 0 };
     let mut dados = WINDOWCOMPOSITIONATTRIBDATA { Attrib: WCA_ACCENT_POLICY, pvData: (&mut acento as *mut ACCENT_POLICY).cast(), cbData: std::mem::size_of::<ACCENT_POLICY>() };
     unsafe { SetWindowCompositionAttribute(hwnd, &mut dados) };
 }
@@ -857,6 +868,10 @@ pub struct Painel {
     lado_inicial: f32,
     /// lista (ícone e nome inteiro) em vez de miniaturas
     lista: bool,
+    /// tamanho da lista, de 0 (compacta, como um menu) a 1 (a maior)
+    lista_t: f32,
+    /// largura da coluna com o nome dos apps na lista
+    lista_app_w: f32,
     /// dos ajustes, de 0 a 1: tamanho das miniaturas e parte da tela que o painel pode ocupar
     pref_tamanho: f32,
     pref_painel: f32,
@@ -909,8 +924,8 @@ impl Painel {
             DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, (&sim as *const i32).cast(), 4);
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&redondo as *const i32).cast(), 4);
             let c = crate::laco::config_atual();
-            let tema = tema(escuro, cor_destaque(), c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
-            aplicar_vidro(hwnd, tema.acento);
+            let tema = tema(escuro, cor_destaque(), c.alttab_transparencia / 100.0, c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
+            aplicar_vidro(hwnd, tema.acento, tema.estado_vidro);
             Some(Painel {
                 hwnd,
                 dc: CreateCompatibleDC(0),
@@ -947,6 +962,8 @@ impl Painel {
                 pos: (0.0, 0.0),
                 lado_inicial: 0.0,
                 lista: false,
+                lista_t: 1.0,
+                lista_app_w: 120.0,
                 pref_tamanho: 0.6,
                 pref_painel: 0.9,
             })
@@ -1016,11 +1033,11 @@ impl Painel {
         self.escala = crate::sistema::escala_dpi(pt);
         let escuro = tema_escuro();
         let c = crate::laco::config_atual();
-        self.tema = tema(escuro, cor_destaque(), c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
+        self.tema = tema(escuro, cor_destaque(), c.alttab_transparencia / 100.0, c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
         self.pref_tamanho = c.alttab_tamanho / 100.0;
         self.pref_painel = c.alttab_painel / 100.0;
         unsafe { DwmSetWindowAttribute(self.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, (&(escuro as i32) as *const i32).cast(), 4) };
-        aplicar_vidro(self.hwnd, self.tema.acento);
+        aplicar_vidro(self.hwnd, self.tema.acento, self.tema.estado_vidro);
         self.itens = janelas
             .into_iter()
             .map(|j| Item {
@@ -1192,6 +1209,7 @@ impl Painel {
         let minimo = 72.0 * s;
         if dimensionar {
             self.lista = self.pref_tamanho <= LIMITE_LISTA;
+            self.lista_t = (self.pref_tamanho / LIMITE_LISTA).clamp(0.0, 1.0);
         }
         if self.lista {
             return self.organizar_lista(dimensionar);
@@ -1207,7 +1225,9 @@ impl Painel {
             lado -= 6.0 * s;
         };
         if dimensionar && total > altura_max {
+            // janelas demais até para a menor miniatura: lista média
             self.lista = true;
+            self.lista_t = 0.5;
             return self.organizar_lista(true);
         }
         if dimensionar {
@@ -1244,7 +1264,8 @@ impl Painel {
     fn organizar_lista(&mut self, dimensionar: bool) -> bool {
         let s = self.escala;
         let (margem, topo, rodape) = (22.0 * s, 70.0 * s, 22.0 * s);
-        let (linha, folga, entre_colunas) = (44.0 * s, 6.0 * s, 14.0 * s);
+        let (linha, folga, _, fonte) = self.medidas_lista();
+        let entre_colunas = 14.0 * s;
         let vis: Vec<usize> = (0..self.itens.len()).filter(|&i| self.itens[i].visivel).collect();
         let n = vis.len().max(1);
         let (largura_max, altura_max) = if dimensionar {
@@ -1254,7 +1275,7 @@ impl Painel {
         };
         let por_coluna_max = (((altura_max + folga) / (linha + folga)).floor() as usize).max(1);
         let colunas = n.div_ceil(por_coluna_max).max(1);
-        let mut largura_coluna = (640.0 * s).min((largura_max - (colunas - 1) as f32 * entre_colunas) / colunas as f32).max(260.0 * s);
+        let mut largura_coluna = ((560.0 + 80.0 * self.lista_t) * s).min((largura_max - (colunas - 1) as f32 * entre_colunas) / colunas as f32).max(260.0 * s);
         let por_coluna = n.div_ceil(colunas);
         if dimensionar {
             let conteudo_w = colunas as f32 * largura_coluna + (colunas - 1) as f32 * entre_colunas;
@@ -1281,6 +1302,9 @@ impl Painel {
             self.itens[i].alvo = Ret { x: x0 + c * (largura_coluna + entre_colunas), y: topo + l * (linha + folga), w: largura_coluna, h: linha };
         }
         self.grupos.clear();
+        // coluna dos nomes dos apps: do tamanho do maior, sem passar de um terço da linha
+        let maior = vis.iter().map(|&i| self.texto.as_ref().map_or(self.itens[i].janela.app.chars().count() as f32 * fonte * 0.6, |t| t.medir(&self.itens[i].janela.app, fonte, true))).fold(0.0, f32::max);
+        self.lista_app_w = (maior + 2.0 * s).min(largura_coluna * 0.34);
         for item in &mut self.itens {
             item.ret.mirar(item.alvo);
             item.opac.alvo = if item.visivel { 1.0 } else { 0.0 };
@@ -1290,6 +1314,51 @@ impl Painel {
         self.limite = Ret { x: 8.0 * s, y: 8.0 * s, w: pw - 16.0 * s, h: ph - 16.0 * s };
         self.sujo_tudo = true;
         true
+    }
+
+    /// Medidas da lista conforme o ajuste de tamanho: (altura da linha, folga, ícone, fonte).
+    fn medidas_lista(&self) -> (f32, f32, f32, f32) {
+        let (s, t) = (self.escala, self.lista_t);
+        let entre = |a: f32, b: f32| (a + (b - a) * t) * s;
+        (entre(28.0, 44.0), entre(2.0, 6.0), entre(18.0, 32.0), entre(12.5, 13.5))
+    }
+
+    fn raio_lista(&self) -> f32 {
+        (6.0 + 4.0 * self.lista_t) * self.escala
+    }
+
+    /// Ícone (x, y, lado) e textos de uma linha da lista desenhada em `a`. O realce usa o
+    /// mesmo para redesenhar a linha selecionada em branco sobre a faixa da seleção.
+    fn linha_lista(&self, k: usize, a: Ret, cor_app: u32, cor_titulo: u32, sombra: u32) -> ((f32, f32, f32), [Rotulo; 2]) {
+        let s = self.escala;
+        let (_, _, lado, fonte) = self.medidas_lista();
+        let janela = &self.itens[k].janela;
+        let pad = (8.0 + 2.0 * self.lista_t) * s;
+        let yc = a.y + a.h / 2.0;
+        let xi = a.x + pad;
+        let xa = xi + lado + 10.0 * s;
+        let xt = xa + self.lista_app_w + 16.0 * s;
+        let fim = a.x + a.w - pad;
+        let mut titulo = if janela.titulo == janela.app { String::new() } else { janela.titulo.clone() };
+        if janela.minimizada {
+            titulo.push_str("   (minimizada)");
+        }
+        let alto = fonte * 1.9;
+        (
+            (xi, yc - lado / 2.0, lado),
+            [
+                Rotulo {
+                    texto: janela.app.clone(),
+                    r: Ret { x: xa, y: yc - alto / 2.0, w: self.lista_app_w.min(fim - xa).max(1.0), h: alto },
+                    tam: fonte,
+                    semi: true,
+                    cor: cor_app,
+                    alinhar: STRING_ALIGN_NEAR,
+                    sombra,
+                },
+                Rotulo { texto: titulo, r: Ret { x: xt, y: yc - alto / 2.0, w: (fim - xt).max(1.0), h: alto }, tam: fonte, semi: false, cor: cor_titulo, alinhar: STRING_ALIGN_NEAR, sombra: 0 },
+            ],
+        )
     }
 
     fn renderizar_base(&mut self) {
@@ -1302,23 +1371,27 @@ impl Painel {
         let mut rotulos: Vec<Rotulo> = Vec::new();
         let cache = &mut self.cores;
         let cores: Vec<Option<[f32; 3]>> = self.grupos.iter().map(|g| *cache.entry(g.icone).or_insert_with(|| cor_do_icone(g.icone))).collect();
-        // lista: cor do ícone e largura do nome do app de cada linha
-        let tam_lista = 13.5 * s;
-        let linhas: Vec<(usize, Option<[f32; 3]>, f32)> = if self.lista {
-            let texto = &self.texto;
+        // lista: cor do ícone de cada linha
+        let cores_linhas: Vec<(usize, Option<[f32; 3]>)> = if self.lista {
             self.itens
                 .iter()
                 .enumerate()
                 .filter(|(_, i)| i.visivel)
-                .map(|(k, i)| {
-                    let cor = *cache.entry(i.janela.icone).or_insert_with(|| cor_do_icone(i.janela.icone));
-                    let larg = texto.as_ref().map_or(i.janela.app.chars().count() as f32 * tam_lista * 0.58, |t| t.medir(&i.janela.app, tam_lista, true));
-                    (k, cor, larg)
-                })
+                .map(|(k, i)| (k, *cache.entry(i.janela.icone).or_insert_with(|| cor_do_icone(i.janela.icone))))
                 .collect()
         } else {
             Vec::new()
         };
+        let raio_lista = self.raio_lista();
+        let linhas: Vec<(Ret, Option<[f32; 3]>, HANDLE, (f32, f32, f32), [Rotulo; 2])> = cores_linhas
+            .into_iter()
+            .map(|(k, cor)| {
+                let a = self.itens[k].alvo;
+                let (icone, textos) = self.linha_lista(k, a, self.tema.texto, self.tema.texto2, self.tema.sombra_texto);
+                (a, cor, self.itens[k].janela.icone, icone, textos)
+            })
+            .collect();
+        let tema = &self.tema;
         {
             let mut tela = Tela { px: &mut self.base, w, h, recorte: todo };
             // vidro: brilho que desce do topo e borda iluminada
@@ -1369,44 +1442,16 @@ impl Painel {
                     rotulos.push(Rotulo { texto: g.n.to_string(), r: p, tam: 12.0 * s, semi: true, cor: tema.texto2, alinhar: STRING_ALIGN_CENTER, sombra: 0 });
                 }
             }
-            // lista: ícone no tamanho normal, nome do app e o título inteiro da janela
-            for &(k, cor, larg) in &linhas {
-                let item = &self.itens[k];
-                let a = item.alvo;
-                let raio = 10.0 * s;
-                tela.preencher(a, raio, tema.cartao);
+            // lista: ícone, nome do app e o título inteiro da janela, em colunas. Compacta, é
+            // só texto sobre o vidro, como um menu; maior, cada linha ganha fundo na cor do ícone.
+            let lt = self.lista_t;
+            for (a, cor, icone, (xi, yi, lado), textos) in linhas {
+                tela.preencher(a, raio_lista, [tema.cartao[0], tema.cartao[1], tema.cartao[2], tema.cartao[3] * lt]);
                 if let Some(c) = cor.filter(|_| tema.tinta_cabecalho > 0.005) {
-                    tela.preencher(a, raio, [c[0], c[1], c[2], tema.tinta_cabecalho * 0.45]);
+                    tela.preencher(a, raio_lista, [c[0], c[1], c[2], tema.tinta_cabecalho * 0.45 * lt]);
                 }
-                let lado = 32.0 * s;
-                let yc = a.y + a.h / 2.0;
-                tela.icone(item.janela.icone, a.x + 10.0 * s, yc - lado / 2.0, lado);
-                let xt = a.x + 10.0 * s + lado + 12.0 * s;
-                let fim = a.x + a.w - 12.0 * s;
-                let larg_app = larg.min((fim - xt) * 0.45) + 2.0 * s;
-                rotulos.push(Rotulo {
-                    texto: item.janela.app.clone(),
-                    r: Ret { x: xt, y: yc - 12.0 * s, w: larg_app, h: 24.0 * s },
-                    tam: tam_lista,
-                    semi: true,
-                    cor: tema.texto,
-                    alinhar: STRING_ALIGN_NEAR,
-                    sombra: tema.sombra_texto,
-                });
-                let mut titulo = if item.janela.titulo == item.janela.app { String::new() } else { format!("–  {}", item.janela.titulo) };
-                if item.janela.minimizada {
-                    titulo.push_str("   (minimizada)");
-                }
-                let xt2 = xt + larg_app + 6.0 * s;
-                rotulos.push(Rotulo {
-                    texto: titulo,
-                    r: Ret { x: xt2, y: yc - 12.0 * s, w: fim - xt2, h: 24.0 * s },
-                    tam: tam_lista,
-                    semi: false,
-                    cor: tema.texto2,
-                    alinhar: STRING_ALIGN_NEAR,
-                    sombra: 0,
-                });
+                tela.icone(icone, xi, yi, lado);
+                rotulos.extend(textos);
             }
             for item in self.itens.iter().filter(|i| i.visivel && !self.lista) {
                 let a = item.alvo;
@@ -1599,7 +1644,8 @@ impl Painel {
     fn atualizar_realce(&mut self) {
         let Some(mut realce) = self.realce.take() else { return };
         let s = self.escala;
-        let anel = self.anel_na_tela().map(|a| a.crescer(5.0 * s));
+        // na lista a seleção é a faixa da linha inteira; na grade, um anel em volta
+        let anel = self.anel_na_tela().map(|a| if self.lista { a } else { a.crescer(5.0 * s) });
         // a prévia mais aberta (uma pode estar fechando enquanto outra abre)
         let previa = (0..self.itens.len())
             .filter(|&i| self.itens[i].thumb != 0 && self.itens[i].visivel && self.itens[i].abre.x > 0.02)
@@ -1668,8 +1714,21 @@ impl Painel {
             if let Some(an) = anel {
                 let an = desloca(an);
                 let d = self.tema.destaque;
-                tela.sombra_externa(an, 9.0 * s, 9.0 * s, 0.0, [d[0], d[1], d[2], 0.28]);
-                tela.contornar(an, 9.0 * s, 2.25 * s, d);
+                if self.lista {
+                    // faixa cheia na cor de destaque, com a linha redesenhada em branco por cima
+                    let raio = self.raio_lista();
+                    tela.sombra_externa(an, raio, 8.0 * s, 2.0 * s, [d[0], d[1], d[2], 0.30]);
+                    tela.preencher(an, raio, [d[0], d[1], d[2], 0.92]);
+                    tela.contornar_iluminado(an.crescer(-0.5), raio, 1.0 * s, [1.0, 1.0, 1.0, 0.35], 0.0);
+                    if self.itens.get(self.sel).is_some_and(|i| i.visivel) {
+                        let ((xi, yi, lado), textos) = self.linha_lista(self.sel, an, 0xFFFF_FFFF, 0xE6FF_FFFF, 0);
+                        tela.icone(self.itens[self.sel].janela.icone, xi, yi, lado);
+                        rotulos.extend(textos);
+                    }
+                } else {
+                    tela.sombra_externa(an, 9.0 * s, 9.0 * s, 0.0, [d[0], d[1], d[2], 0.28]);
+                    tela.contornar(an, 9.0 * s, 2.25 * s, d);
+                }
             }
         }
         if let Some(t) = &self.texto {

@@ -20,6 +20,7 @@ pub struct Config {
     pub onda_clique: bool,
     pub desativar_tela_cheia: bool,
     pub alternador: bool,
+    pub alttab_transparencia: f32,
     pub alttab_fosco: f32,
     pub alttab_cor: f32,
     pub alttab_tamanho: f32,
@@ -49,6 +50,7 @@ impl Default for Config {
             onda_clique: true,
             desativar_tela_cheia: true,
             alternador: true,
+            alttab_transparencia: 85.0,
             alttab_fosco: 50.0,
             alttab_cor: 50.0,
             alttab_tamanho: 60.0,
@@ -91,9 +93,10 @@ desativar_tela_cheia = sim  # jogos e videos em tela cheia usam o ponteiro norma
 
 # Alt+Tab
 alternador = sim          # Alt+Tab do FlowCursor: miniaturas ao vivo agrupadas por aplicativo
-alttab_fosco = 50         # 0 a 100. Vidro do painel: 0 quase transparente, 100 bem fosco
+alttab_transparencia = 85 # 0 a 100. Quanto do fundo aparece atras do vidro do painel
+alttab_fosco = 50         # 0 a 100. 0 vidro limpo (sem desfoque), 100 bem fosco e leitoso
 alttab_cor = 50           # 0 a 100. Cor do icone no topo de cada cartao (0 desliga)
-alttab_tamanho = 60       # 0 a 100. Tamanho das miniaturas; ate 10 mostra uma lista com o nome inteiro
+alttab_tamanho = 60       # 0 a 100. Tamanho das miniaturas; ate 20 mostra uma lista com o nome inteiro
 alttab_painel = 90        # 40 a 100. Quanto da tela o painel pode ocupar (%)
 ";
 
@@ -140,6 +143,7 @@ pub fn analisar(texto: &str) -> (Config, Vec<String>) {
             "onda_clique" => sim_nao(v).map(|x| c.onda_clique = x),
             "desativar_tela_cheia" => sim_nao(v).map(|x| c.desativar_tela_cheia = x),
             "alternador" => sim_nao(v).map(|x| c.alternador = x),
+            "alttab_transparencia" => num((0.0, 100.0)).map(|x| c.alttab_transparencia = x),
             "alttab_fosco" => num((0.0, 100.0)).map(|x| c.alttab_fosco = x),
             "alttab_cor" => num((0.0, 100.0)).map(|x| c.alttab_cor = x),
             "alttab_tamanho" => num((0.0, 100.0)).map(|x| c.alttab_tamanho = x),
@@ -190,6 +194,7 @@ pub fn pares(c: &Config) -> Vec<(&'static str, String)> {
         ("onda_clique", sn(c.onda_clique)),
         ("desativar_tela_cheia", sn(c.desativar_tela_cheia)),
         ("alternador", sn(c.alternador)),
+        ("alttab_transparencia", numero(c.alttab_transparencia)),
         ("alttab_fosco", numero(c.alttab_fosco)),
         ("alttab_cor", numero(c.alttab_cor)),
         ("alttab_tamanho", numero(c.alttab_tamanho)),

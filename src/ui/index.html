@@ -143,6 +143,8 @@ input[type=range]::-webkit-slider-runnable-track {
   height: 4px; border-radius: 2px;
   /* marquinha onde fica o valor padrão, por cima do preenchimento */
   background:
+    linear-gradient(to right, transparent calc(var(--l, -10%) - 1px), var(--destaque) calc(var(--l, -10%) - 1px),
+      var(--destaque) calc(var(--l, -10%) + 1px), transparent calc(var(--l, -10%) + 1px)),
     linear-gradient(to right, transparent calc(var(--d, -10%) - 1.5px), var(--marca) calc(var(--d, -10%) - 1.5px),
       var(--marca) calc(var(--d, -10%) + 1.5px), transparent calc(var(--d, -10%) + 1.5px)),
     linear-gradient(to right, var(--destaque) var(--p), var(--trilha) var(--p));
@@ -369,12 +371,15 @@ const SECOES = [
   { titulo: 'Alt+Tab', linhas: [
     { id: 'alternador', tipo: 'chave', nome: 'Alt+Tab do FlowCursor',
       legenda: 'Miniaturas ao vivo agrupadas por aplicativo. Pare o mouse sobre uma miniatura para ver a janela inteira; digite para buscar. Desligado, volta o do Windows.' },
-    { id: 'alttab_fosco', nome: 'Vidro', min: 0, max: 100, passo: 1,
-      fmt: v => v < 15 ? 'transparente' : v > 85 ? 'bem fosco' : pct(v), legenda: 'Menos fosco deixa ver mais o que está atrás do painel; mais fosco fica leitoso.' },
+    { id: 'alttab_transparencia', nome: 'Transparência', min: 0, max: 100, passo: 1, fmt: pct,
+      legenda: 'Quanto do que está atrás do painel aparece através do vidro.' },
+    { id: 'alttab_fosco', nome: 'Fosco', min: 0, max: 100, passo: 1,
+      fmt: v => v < 8 ? 'vidro limpo' : v > 85 ? 'leitoso' : pct(v), legenda: 'Do vidro limpo, sem desfoque, ao fosco leitoso.' },
     { id: 'alttab_cor', nome: 'Cor dos cartões', min: 0, max: 100, passo: 1,
       fmt: v => v == 0 ? 'desligada' : pct(v), legenda: 'Tom do ícone de cada aplicativo no topo do cartão.' },
     { id: 'alttab_tamanho', nome: 'Tamanho das miniaturas', min: 0, max: 100, passo: 1,
-      fmt: v => v <= 10 ? 'lista' : pct(v), legenda: 'No mínimo, o painel vira uma lista com o ícone e o nome inteiro de cada janela. Com janelas demais para caber, a lista aparece sozinha.' },
+      fmt: v => v <= 20 ? 'lista ' + Math.round(v / 20 * 100) + '%' : pct(v), marca: 20,
+      legenda: 'Até a marca azul o painel é uma lista com o ícone e o nome inteiro de cada janela (no mínimo, compacta como um menu); depois da marca, miniaturas. Com janelas demais para caber, a lista aparece sozinha.' },
     { id: 'alttab_painel', nome: 'Tamanho do painel', min: 40, max: 100, passo: 1,
       fmt: v => pct(v) + ' da tela', legenda: 'Até quanto da tela o painel pode ocupar.' },
   ]},
@@ -562,6 +567,7 @@ function linha(l) {  const d = el('div', 'linha');
     d.append(r);
     controles[l.id] = {
       definir: v => { r.value = v; pintar(v); },
+      _: l.marca !== undefined && r.style.setProperty('--l', ((l.marca - l.min) / (l.max - l.min) * 100) + '%'),
       marcarPadrao: v => r.style.setProperty('--d', ((v - l.min) / (l.max - l.min) * 100) + '%'),
     };
   }
