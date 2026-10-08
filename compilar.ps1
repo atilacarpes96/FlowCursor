@@ -1,5 +1,5 @@
 ﻿# Compila o FlowCursor, troca o FlowCursor.exe desta pasta e abre a versão nova.
-# Uso: powershell -ExecutionPolicy Bypass -File E:\FlowCursor\compilar.ps1 [-NaoAbrir]
+# Uso: powershell -ExecutionPolicy Bypass -File E:\Programas desenvolvidos\FlowCursor\compilar.ps1 [-NaoAbrir]
 param([switch]$NaoAbrir)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
