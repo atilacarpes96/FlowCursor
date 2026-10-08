@@ -266,6 +266,15 @@ fn atender(mut s: TcpStream, porta: u16, chave: &str) -> std::io::Result<()> {
                 }
             }
         }
+        ("POST", "/api/reiniciar") => {
+            // Uma instância nova fecha esta (que devolve o ponteiro normal) e começa do zero.
+            reg!("tela de ajustes: reiniciar");
+            let r = std::env::current_exe().and_then(|exe| std::process::Command::new(exe).arg("--reiniciar").spawn());
+            match r {
+                Ok(_) => responder(&mut s, "200 OK", json, "{}"),
+                Err(e) => responder(&mut s, "500 Internal Server Error", "text/plain; charset=utf-8", &format!("não consegui reiniciar: {e}")),
+            }
+        }
         ("POST", "/api/relatar") => {
             // corpo: tipo na 1ª linha, título na 2ª, o resto é a descrição
             let mut partes = p.corpo.splitn(3, '\n');
@@ -362,6 +371,14 @@ pub fn fechar_janela() {
     if let Some(mut f) = JANELA.lock().unwrap_or_else(|e| e.into_inner()).take() {
         let _ = f.kill();
         let _ = f.wait();
+    }
+    // O Edge costuma entregar a janela a um processo que já estava aberto, e aí matar o
+    // processo que abrimos não fecha nada: fecha a própria janela.
+    unsafe {
+        let janela = FindWindowW(w("Chrome_WidgetWin_1").as_ptr(), w(TITULO_JANELA).as_ptr());
+        if janela != 0 {
+            PostMessageW(janela, WM_CLOSE, 0, 0);
+        }
     }
 }
 

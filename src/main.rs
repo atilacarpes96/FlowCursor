@@ -131,7 +131,9 @@ fn main() {
     // --teste N: roda por N segundos e fecha sozinho (e substitui uma instância aberta).
     let teste: Option<u32> = args.iter().position(|a| a == "--teste").and_then(|i| args.get(i + 1)).and_then(|s| s.parse().ok());
     // --ajustes: abre a tela de ajustes (é o que o atalho da área de trabalho usa).
-    let abrir_ajustes = args.iter().any(|a| a == "--ajustes");
+    // --reiniciar: fecha a instância aberta e começa do zero, com a tela de ajustes (botão dela).
+    let reiniciar = args.iter().any(|a| a == "--reiniciar");
+    let abrir_ajustes = reiniciar || args.iter().any(|a| a == "--ajustes");
 
     // Quem abriu o FlowCursor (um terminal, um app) pode encerrar de uma vez todos os
     // processos que abriu, guardião junto. Fora desse grupo, o FlowCursor fica independente.
@@ -166,11 +168,11 @@ fn main() {
     sistema::sem_economia_de_energia();
 
     // Uma instância só. Abrir de novo com ele já rodando abre a tela de ajustes;
-    // só o modo de teste fecha a instância aberta e assume o lugar.
+    // só o modo de teste e o --reiniciar fecham a instância aberta e assumem o lugar.
     let mutex = unsafe {
         let anterior = FindWindowW(w(CLASSE_PRINCIPAL).as_ptr(), null());
         if anterior != 0 {
-            if teste.is_none() {
+            if teste.is_none() && !reiniciar {
                 PostMessageW(anterior, WM_ABRIR_AJUSTES, 0, 0);
                 return;
             }

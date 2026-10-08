@@ -178,6 +178,15 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px co
 }
 .volta.visivel { display: inline-flex; }
 
+/* Reiniciar, ao lado da chave */
+.reiniciar {
+  flex: none; width: 31px; height: 31px; border-radius: 50%; border: 0; padding: 0;
+  background: var(--seg-fundo); color: var(--texto-2); font: inherit; font-size: 17px; line-height: 1; cursor: pointer;
+  transition: color .2s, background .2s, transform .5s cubic-bezier(.3, 1.3, .5, 1);
+}
+.reiniciar:hover { color: var(--destaque); background: color-mix(in srgb, var(--destaque) 14%, transparent); }
+.reiniciar.girando { transform: rotate(360deg); color: var(--destaque); pointer-events: none; }
+
 /* Chave liga/desliga */
 .chave { position: relative; width: 51px; height: 31px; flex: none; }
 .chave input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
@@ -290,6 +299,7 @@ body.desligado main { opacity: 0.45; pointer-events: none; filter: saturate(0.4)
       <h1>FlowCursor</h1>
       <p id="status">Conectando…</p>
     </div>
+    <button id="reiniciar" class="reiniciar" title="Reiniciar o FlowCursor: fecha, devolve o ponteiro normal e abre de novo. Resolve a maioria dos travamentos." aria-label="Reiniciar o FlowCursor">↻</button>
     <label class="chave" title="Ligar ou pausar (Ctrl+Alt+F9)">
       <input type="checkbox" id="ativo" aria-label="FlowCursor ativo"><span></span>
     </label>
@@ -303,6 +313,12 @@ body.desligado main { opacity: 0.45; pointer-events: none; filter: saturate(0.4)
 <script>
 const CHAVE = new URLSearchParams(location.search).get('t') || '';
 
+document.getElementById('reiniciar').onclick = async (e) => {
+  const b = e.currentTarget;
+  b.classList.add('girando');
+  document.getElementById('status').textContent = 'Reiniciando… a tela de ajustes abre de novo em instantes.';
+  try { await api('/api/reiniciar', ''); } catch (_) { b.classList.remove('girando'); }
+};
 async function api(rota, corpo) {
   const r = await fetch(rota, {
     method: corpo === undefined ? 'GET' : 'POST',

@@ -15,6 +15,9 @@ ou direto em [Issues](https://github.com/atilacarpes96/FlowCursor/issues).
   ajustes; se o FlowCursor já estiver aberto, só traz os ajustes para a frente.
 - Na bandeja (perto do relógio): clique duplo abre os ajustes; clique direito tem
   ajustes, ativo, o arquivo de configuração, o registro e sair.
+- Ponteiro travado ou estranho: abra o FlowCursor pelo menu Iniciar (tecla Windows, digite "FlowCursor",
+  Enter) e use o botão **↻** ao lado da chave, no topo dos ajustes: ele fecha, devolve o ponteiro normal e
+  abre de novo.
 - **Ctrl+Alt+F9**: pausa e retoma.
 - **Ctrl+Alt+F10**: fecha e devolve o ponteiro normal.
 - Se algo der errado, o ponteiro normal volta sozinho: um processo guardião devolve os
