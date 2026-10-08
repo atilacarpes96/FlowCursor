@@ -936,3 +936,32 @@ extern "system" {
         linhas: *mut i32,
     ) -> i32;
 }
+
+// ---------- WinHTTP (procurar e baixar atualizações) ----------
+
+pub const WINHTTP_ACCESS_TYPE_DEFAULT_PROXY: u32 = 0;
+pub const WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY: u32 = 4;
+pub const WINHTTP_FLAG_SECURE: u32 = 0x0080_0000;
+pub const WINHTTP_QUERY_STATUS_CODE: u32 = 19;
+pub const WINHTTP_QUERY_FLAG_NUMBER: u32 = 0x2000_0000;
+
+#[link(name = "winhttp", kind = "raw-dylib")]
+extern "system" {
+    pub fn WinHttpOpen(agente: *const u16, acesso: u32, proxy: *const u16, excecoes: *const u16, flags: u32) -> HANDLE;
+    pub fn WinHttpSetTimeouts(h: HANDLE, resolver: i32, conectar: i32, enviar: i32, receber: i32) -> BOOL;
+    pub fn WinHttpConnect(h: HANDLE, servidor: *const u16, porta: u16, reservado: u32) -> HANDLE;
+    pub fn WinHttpOpenRequest(
+        h: HANDLE,
+        verbo: *const u16,
+        caminho: *const u16,
+        versao: *const u16,
+        referencia: *const u16,
+        tipos: *const *const u16,
+        flags: u32,
+    ) -> HANDLE;
+    pub fn WinHttpSendRequest(h: HANDLE, cabecalhos: *const u16, tam: u32, opcional: *const c_void, tam_opcional: u32, total: u32, contexto: usize) -> BOOL;
+    pub fn WinHttpReceiveResponse(h: HANDLE, reservado: *mut c_void) -> BOOL;
+    pub fn WinHttpQueryHeaders(h: HANDLE, nivel: u32, nome: *const u16, buf: *mut c_void, tam: *mut u32, indice: *mut u32) -> BOOL;
+    pub fn WinHttpReadData(h: HANDLE, buf: *mut c_void, ler: u32, lidos: *mut u32) -> BOOL;
+    pub fn WinHttpCloseHandle(h: HANDLE) -> BOOL;
+}

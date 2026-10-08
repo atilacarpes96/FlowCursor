@@ -2,7 +2,12 @@
 
 Troca o desenho do ponteiro do Windows por um ponteiro com mola, borrão de
 movimento e rastro. O ponteiro real continua fazendo os cliques; só o desenho
-muda, então a precisão e o atraso do clique não mudam.
+muda, então a precisão e o atraso do clique não mudam. Também troca o Alt+Tab por um painel de vidro
+com miniaturas ao vivo das janelas.
+
+**Baixar:** o instalador está em [Releases](https://github.com/atilacarpes96/FlowCursor/releases/latest)
+(`FlowCursor-Instalador.exe`, sem administrador). **Problema ou ideia:** pelo botão da tela de ajustes
+ou direto em [Issues](https://github.com/atilacarpes96/FlowCursor/issues).
 
 ## Usar
 
@@ -40,6 +45,8 @@ A tela grava no mesmo arquivo.
 | `clique`, `onda_clique` | o ponteiro encolhe e uma onda se abre ao clicar |
 | `desativar_tela_cheia` | jogos e vídeos em tela cheia usam o ponteiro normal |
 | `alttab_fosco`, `alttab_cor` | vidro do painel do Alt+Tab e cor no topo dos cartões (0 a 100) |
+| `alttab_tamanho` | tamanho das miniaturas do Alt+Tab; até 10 vira lista com o nome inteiro |
+| `alttab_painel` | quanto da tela o painel do Alt+Tab pode ocupar (40 a 100%) |
 
 ## Alt+Tab
 
@@ -51,7 +58,11 @@ verdade do Windows, que aparece mesmo com o painel sem foco):
 - o topo de cada cartão leva um tom discreto da cor do ícone do aplicativo (ícone sem cor deixa o
   cartão neutro), com o ícone grande e o nome em destaque, para achar o app mesmo com miniaturas parecidas;
 - na tela de ajustes, seção Alt+Tab: **Vidro** (de quase transparente a bem fosco), **Cor dos cartões**
-  (0 desliga) e o botão **Ver o Alt+Tab**, que mostra o painel por alguns segundos;
+  (0 desliga), **Tamanho das miniaturas**, **Tamanho do painel** e o botão **Ver o Alt+Tab**, que mostra
+  o painel por alguns segundos;
+- no tamanho mínimo das miniaturas, ou quando há janelas demais para caber, o painel vira uma lista:
+  ícone do app no tamanho normal, nome do app e o título inteiro da janela ("AutoCAD – Desenho1.dwg");
+  na grade, o título embaixo de cada miniatura usa até duas linhas;
 - parar o mouse sobre uma miniatura abre a prévia da janela inteira por cima das outras (que
   recuam um pouco), com o título embaixo; a prévia não amplia além do tamanho real da janela;
 - a seleção é um anel na cor de destaque do Windows, numa camada própria por cima das
@@ -82,6 +93,19 @@ Desliga nos ajustes, seção "Alt+Tab" (`alternador = nao`). Código em `src/alt
   alguns jogos): o desenho original continua aparecendo.
 
 O `flowcursor.log` registra cada uma dessas trocas e, a cada 30 s de uso, o desempenho.
+
+## Atualizar e relatar
+
+Na tela de ajustes, seção **Atualização e sugestões**:
+
+- **Atualização** procura a última versão em Releases (pela API do GitHub, com o WinHTTP do Windows).
+  Se houver uma mais nova, baixa o instalador, instala em silêncio (os ajustes ficam) e reabre o
+  FlowCursor. Pela linha de comando: `FlowCursor.exe --atualizar`; `--atualizacao <arquivo>` só procura.
+- **Relatar problema ou sugerir** abre uma issue no GitHub já preenchida com a versão e o Windows.
+
+Para publicar uma versão: subir o número em `Cargo.toml`, rodar `empacotar.ps1` e criar um release
+com a tag `vX.Y.Z` e o `dist\FlowCursor-Instalador.exe` anexado. Quem tem a 0.4.0 ou mais nova
+recebe pelo botão; versões antes da 0.4.0 precisam rodar o instalador novo uma vez.
 
 ## Distribuir
 

@@ -248,6 +248,27 @@ kbd {
   background: var(--seg-fundo); color: var(--texto);
 }
 
+/* Atualização e relatos */
+.botao-linha {
+  flex: none; height: 32px; padding: 0 14px; border-radius: 16px; border: 0;
+  background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--destaque);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform .15s, opacity .2s;
+}
+.botao-linha:active { transform: scale(0.96); }
+.botao-linha:disabled { opacity: 0.5; cursor: default; }
+.botao-linha.forte { background: var(--destaque); color: #fff; }
+.novidade { color: var(--verde); font-weight: 600; }
+.erro { color: var(--vermelho); }
+.relato { display: none; margin-top: 12px; }
+.relato.aberto { display: block; animation: surgir .3s cubic-bezier(.2, .8, .2, 1) both; }
+.relato input, .relato textarea {
+  width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--separador);
+  background: var(--seg-fundo); color: var(--texto); font: inherit; font-size: 14px; user-select: text; resize: vertical;
+}
+.relato textarea { min-height: 96px; }
+.relato input:focus, .relato textarea:focus { outline: 2px solid color-mix(in srgb, var(--destaque) 50%, transparent); outline-offset: 0; }
+.relato .segmentado[data-v=sugestao] .pilula { transform: translateX(100%); }
+.relato .fim { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
 /* FlowCursor fechado */
 #aviso {
   position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 9; max-width: 488px; margin: 0 auto;
@@ -336,6 +357,10 @@ const SECOES = [
       fmt: v => v < 15 ? 'transparente' : v > 85 ? 'bem fosco' : pct(v), legenda: 'Menos fosco deixa ver mais o que está atrás do painel; mais fosco fica leitoso.' },
     { id: 'alttab_cor', nome: 'Cor dos cartões', min: 0, max: 100, passo: 1,
       fmt: v => v == 0 ? 'desligada' : pct(v), legenda: 'Tom do ícone de cada aplicativo no topo do cartão.' },
+    { id: 'alttab_tamanho', nome: 'Tamanho das miniaturas', min: 0, max: 100, passo: 1,
+      fmt: v => v <= 10 ? 'lista' : pct(v), legenda: 'No mínimo, o painel vira uma lista com o ícone e o nome inteiro de cada janela. Com janelas demais para caber, a lista aparece sozinha.' },
+    { id: 'alttab_painel', nome: 'Tamanho do painel', min: 40, max: 100, passo: 1,
+      fmt: v => pct(v) + ' da tela', legenda: 'Até quanto da tela o painel pode ocupar.' },
   ]},
 ];
 
@@ -390,6 +415,8 @@ function montar() {
   sec.append(cartao, el('p', 'rodape', 'Passe o mouse nos quadrados para ver cada forma. As mudanças acima valem na hora.'));
   main.append(sec);
 
+  main.append(secaoAtualizacao());
+
   const acoes = el('div', 'acoes');
   const registro = el('button', 'botao', 'Abrir registro');
   registro.onclick = () => api('/api/registro', '').catch(desconectado);
@@ -400,8 +427,74 @@ function montar() {
   main.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
 }
 
-function linha(l) {
-  const d = el('div', 'linha');
+function secaoAtualizacao() {
+  const sec = el('section');
+  sec.append(el('h2', '', 'Atualização e sugestões'));
+  const cartao = el('div', 'cartao');
+
+  // versão e atualização pelo GitHub
+  const lv = el('div', 'linha');
+  const cab = el('div', 'cabeca', '<span class="nome">Atualização</span>');
+  const botao = el('button', 'botao-linha', 'Procurar');
+  cab.append(botao);
+  const leg = el('div', 'legenda', 'Procura a versão mais nova no GitHub.');
+  lv.append(cab, leg);
+  let pronta = null;
+  const procurar = async (silencioso) => {
+    botao.disabled = true; botao.textContent = 'Procurando…';
+    try {
+      const r = await api('/api/atualizacao');
+      if (r.erro) { if (!silencioso) leg.innerHTML = `<span class="erro">Não deu para procurar: ${r.erro}.</span>`; }
+      else if (r.disponivel) {
+        pronta = r.ultima;
+        leg.innerHTML = `<span class="novidade">Versão ${r.ultima} disponível.</span> Você está na ${r.atual}. Os seus ajustes são mantidos.`;
+      } else leg.textContent = `Você está na versão mais nova (${r.atual}).`;
+    } catch (e) { if (!silencioso) leg.innerHTML = '<span class="erro">Não deu para procurar agora.</span>'; }
+    botao.disabled = false;
+    botao.textContent = pronta ? `Atualizar para ${pronta}` : 'Procurar';
+    botao.classList.toggle('forte', !!pronta);
+  };
+  botao.onclick = async () => {
+    if (!pronta) return procurar(false);
+    botao.disabled = true; botao.textContent = 'Baixando…';
+    leg.textContent = 'Baixando e instalando. O FlowCursor fecha e abre de novo sozinho em alguns segundos.';
+    try { await api('/api/atualizar', ''); }
+    catch (e) {
+      leg.innerHTML = `<span class="erro">${e.message || 'A atualização não deu certo.'}</span>`;
+      botao.disabled = false; botao.textContent = `Atualizar para ${pronta}`;
+    }
+  };
+  cartao.append(lv);
+  setTimeout(() => procurar(true), 600);
+
+  // relatar problema ou sugerir
+  const lr = el('div', 'linha');
+  const cabR = el('div', 'cabeca', '<span class="nome">Relatar problema ou sugerir</span>');
+  const abrir = el('button', 'botao-linha', 'Escrever');
+  cabR.append(abrir);
+  const form = el('div', 'relato');
+  form.innerHTML = `<div class="segmentado" data-v="problema"><div class="pilula"></div>
+      <button data-v="problema">Problema</button><button data-v="sugestao">Sugestão</button></div>
+    <input type="text" maxlength="120" placeholder="Resumo em uma linha">
+    <textarea maxlength="4000" placeholder="O que aconteceu, ou o que você gostaria que o FlowCursor fizesse"></textarea>
+    <div class="fim"><span class="legenda">Abre o GitHub com tudo preenchido, mais a versão e o Windows. Precisa de uma conta no GitHub para enviar.</span>
+      <button class="botao-linha forte">Abrir no GitHub</button></div>`;
+  const seg = form.querySelector('.segmentado');
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => seg.dataset.v = b.dataset.v);
+  const titulo = form.querySelector('input'), texto = form.querySelector('textarea');
+  abrir.onclick = () => { form.classList.toggle('aberto'); if (form.classList.contains('aberto')) titulo.focus(); };
+  form.querySelector('.fim button').onclick = async () => {
+    if (!titulo.value.trim()) { titulo.focus(); return; }
+    await api('/api/relatar', `${seg.dataset.v}\n${titulo.value.replace(/\n/g, ' ')}\n${texto.value}`).catch(desconectado);
+    titulo.value = ''; texto.value = ''; form.classList.remove('aberto');
+  };
+  lr.append(cabR, form);
+  cartao.append(lr);
+  sec.append(cartao);
+  return sec;
+}
+
+function linha(l) {  const d = el('div', 'linha');
   if (l.tipo === 'estilo') {
     const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
     cab.append(botaoVolta('estilo'));

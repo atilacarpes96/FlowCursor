@@ -22,6 +22,8 @@ pub struct Config {
     pub alternador: bool,
     pub alttab_fosco: f32,
     pub alttab_cor: f32,
+    pub alttab_tamanho: f32,
+    pub alttab_painel: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -49,6 +51,8 @@ impl Default for Config {
             alternador: true,
             alttab_fosco: 50.0,
             alttab_cor: 50.0,
+            alttab_tamanho: 60.0,
+            alttab_painel: 90.0,
         }
     }
 }
@@ -89,6 +93,8 @@ desativar_tela_cheia = sim  # jogos e videos em tela cheia usam o ponteiro norma
 alternador = sim          # Alt+Tab do FlowCursor: miniaturas ao vivo agrupadas por aplicativo
 alttab_fosco = 50         # 0 a 100. Vidro do painel: 0 quase transparente, 100 bem fosco
 alttab_cor = 50           # 0 a 100. Cor do icone no topo de cada cartao (0 desliga)
+alttab_tamanho = 60       # 0 a 100. Tamanho das miniaturas; ate 10 mostra uma lista com o nome inteiro
+alttab_painel = 90        # 40 a 100. Quanto da tela o painel pode ocupar (%)
 ";
 
 fn sim_nao(v: &str) -> Option<bool> {
@@ -136,6 +142,8 @@ pub fn analisar(texto: &str) -> (Config, Vec<String>) {
             "alternador" => sim_nao(v).map(|x| c.alternador = x),
             "alttab_fosco" => num((0.0, 100.0)).map(|x| c.alttab_fosco = x),
             "alttab_cor" => num((0.0, 100.0)).map(|x| c.alttab_cor = x),
+            "alttab_tamanho" => num((0.0, 100.0)).map(|x| c.alttab_tamanho = x),
+            "alttab_painel" => num((40.0, 100.0)).map(|x| c.alttab_painel = x),
             _ => {
                 avisos.push(format!("linha {}: chave desconhecida '{k}'", n + 1));
                 continue;
@@ -184,6 +192,8 @@ pub fn pares(c: &Config) -> Vec<(&'static str, String)> {
         ("alternador", sn(c.alternador)),
         ("alttab_fosco", numero(c.alttab_fosco)),
         ("alttab_cor", numero(c.alttab_cor)),
+        ("alttab_tamanho", numero(c.alttab_tamanho)),
+        ("alttab_painel", numero(c.alttab_painel)),
     ]
 }
 

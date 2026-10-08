@@ -351,6 +351,10 @@ pub fn instalar(args: &[String]) {
         std::process::exit(1);
     }
     if silencioso {
+        // atualização pelo botão da tela de ajustes: abre a versão nova já com os ajustes
+        if args.iter().any(|a| a == "--abrir") {
+            let _ = Command::new(&destino).arg("--ajustes").current_dir(&pasta).spawn();
+        }
         return;
     }
     dialogo(&Dialogo {

@@ -4,6 +4,7 @@
 #![windows_subsystem = "windows"]
 
 mod alternador;
+mod atualizacao;
 mod config;
 mod ffi;
 mod formas;
@@ -81,6 +82,35 @@ fn main() {
         }
         Some("--galeria") => {
             galeria::gerar(Path::new(args.get(2).map_or("galeria", String::as_str)));
+            return;
+        }
+        Some("--atualizacao") => {
+            // Só procura (não instala) e grava o resultado no arquivo dado, para testes.
+            let texto = match atualizacao::ultima() {
+                Ok(l) => format!(
+                    "atual {} · publicada {} · mais nova: {}\ninstalador: {}\npágina: {}\n",
+                    env!("CARGO_PKG_VERSION"),
+                    l.versao,
+                    atualizacao::mais_nova(&l.versao, env!("CARGO_PKG_VERSION")),
+                    l.instalador,
+                    l.pagina
+                ),
+                Err(e) => format!("erro: {e}\n"),
+            };
+            let _ = std::fs::write(args.get(2).map_or("atualizacao.txt", String::as_str), texto);
+            return;
+        }
+        Some("--atualizar") => {
+            // O mesmo que o botão da tela de ajustes: baixa a versão mais nova e instala.
+            match atualizacao::ultima() {
+                Ok(l) if atualizacao::mais_nova(&l.versao, env!("CARGO_PKG_VERSION")) => {
+                    if let Err(e) = atualizacao::instalar(&l) {
+                        reg!("atualização falhou: {e}");
+                    }
+                }
+                Ok(_) => reg!("atualização: já está na versão mais nova"),
+                Err(e) => reg!("atualização: {e}"),
+            }
             return;
         }
         Some("--diagnostico") => {

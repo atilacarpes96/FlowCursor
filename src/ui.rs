@@ -135,6 +135,54 @@ fn estado_json() -> String {
     )
 }
 
+fn json_texto(s: &str) -> String {
+    let mut r = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => r.push_str("\\\""),
+            '\\' => r.push_str("\\\\"),
+            '\n' => r.push_str("\\n"),
+            c if (c as u32) < 0x20 => r.push_str(&format!("\\u{:04x}", c as u32)),
+            c => r.push(c),
+        }
+    }
+    r.push('"');
+    r
+}
+
+fn codificar_url(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// "Windows 11 Pro 25H2 (build 26200)", para os relatos de problema.
+fn versao_windows() -> String {
+    const HKEY_LOCAL_MACHINE: HANDLE = 0x8000_0002u32 as i32 as isize;
+    unsafe {
+        let mut chave: HANDLE = 0;
+        if RegOpenKeyExW(HKEY_LOCAL_MACHINE, w(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion").as_ptr(), 0, KEY_QUERY_VALUE, &mut chave) != 0 {
+            return "Windows".into();
+        }
+        let ler = |nome: &str| {
+            let mut buf = [0u16; 128];
+            let mut tam = (buf.len() * 2) as u32;
+            if RegQueryValueExW(chave, w(nome).as_ptr(), std::ptr::null_mut(), std::ptr::null_mut(), buf.as_mut_ptr().cast(), &mut tam) != 0 {
+                return String::new();
+            }
+            String::from_utf16_lossy(&buf[..(tam as usize / 2)]).trim_end_matches('\0').to_string()
+        };
+        let (nome, versao, build) = (ler("ProductName"), ler("DisplayVersion"), ler("CurrentBuild"));
+        RegCloseKey(chave);
+        // o registro ainda diz "Windows 10" no 11; o build a partir de 22000 é o 11
+        let nome = if build.parse::<u32>().unwrap_or(0) >= 22000 { nome.replace("Windows 10", "Windows 11") } else { nome };
+        format!("{nome} {versao} (build {build})")
+    }
+}
+
 fn aplicar(cfg: Config) -> Result<(), String> {
     config::salvar(&cfg).map_err(|e| format!("não consegui gravar o flowcursor.ini: {e}"))?;
     laco::publicar_config(cfg);
@@ -188,6 +236,61 @@ fn atender(mut s: TcpStream, porta: u16, chave: &str) -> std::io::Result<()> {
                 reg!("iniciar com o Windows: {}", if ligar { "ligado" } else { "desligado" });
             }
             responder(&mut s, "200 OK", json, &estado_json())
+        }
+        ("GET", "/api/atualizacao") => {
+            let corpo = match crate::atualizacao::ultima() {
+                Ok(l) => format!(
+                    "{{\"atual\":{},\"ultima\":{},\"disponivel\":{},\"pagina\":{}}}",
+                    json_texto(env!("CARGO_PKG_VERSION")),
+                    json_texto(l.versao.trim_start_matches('v')),
+                    crate::atualizacao::mais_nova(&l.versao, env!("CARGO_PKG_VERSION")),
+                    json_texto(&l.pagina)
+                ),
+                Err(e) => format!("{{\"atual\":{},\"erro\":{}}}", json_texto(env!("CARGO_PKG_VERSION")), json_texto(&e)),
+            };
+            responder(&mut s, "200 OK", json, &corpo)
+        }
+        ("POST", "/api/atualizar") => {
+            let r = crate::atualizacao::ultima().and_then(|l| {
+                if crate::atualizacao::mais_nova(&l.versao, env!("CARGO_PKG_VERSION")) {
+                    crate::atualizacao::instalar(&l)
+                } else {
+                    Err("você já está na versão mais nova".into())
+                }
+            });
+            match r {
+                Ok(()) => responder(&mut s, "200 OK", json, "{}"),
+                Err(e) => {
+                    reg!("atualização falhou: {e}");
+                    responder(&mut s, "500 Internal Server Error", "text/plain; charset=utf-8", &e)
+                }
+            }
+        }
+        ("POST", "/api/relatar") => {
+            // corpo: tipo na 1ª linha, título na 2ª, o resto é a descrição
+            let mut partes = p.corpo.splitn(3, '\n');
+            let tipo = partes.next().unwrap_or("").trim();
+            let titulo = partes.next().unwrap_or("").trim();
+            let texto = partes.next().unwrap_or("").trim();
+            let marca = if tipo == "sugestao" { "Sugestão" } else { "Problema" };
+            let corpo = format!(
+                "{texto}\n\n---\nFlowCursor {} · {} · Alt+Tab {}",
+                env!("CARGO_PKG_VERSION"),
+                versao_windows(),
+                if laco::config_atual().alternador { "ligado" } else { "desligado" }
+            );
+            let url = format!(
+                "https://github.com/{}/issues/new?title={}&body={}&labels={}",
+                crate::atualizacao::REPOSITORIO,
+                codificar_url(&format!("[{marca}] {titulo}")),
+                codificar_url(&corpo),
+                if tipo == "sugestao" { "enhancement" } else { "bug" }
+            );
+            reg!("tela de ajustes: relato aberto no GitHub ({marca})");
+            unsafe {
+                ShellExecuteW(0, w("open").as_ptr(), w(&url).as_ptr(), null(), null(), SW_SHOWNORMAL);
+            }
+            responder(&mut s, "200 OK", json, "{}")
         }
         ("POST", "/api/alttab") => {
             // mostra o painel por alguns segundos, para ver o vidro e as cores enquanto ajusta

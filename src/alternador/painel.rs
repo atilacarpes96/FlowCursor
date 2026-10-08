@@ -21,6 +21,8 @@ const ESPERA_PREVIA: Duration = Duration::from_millis(140);
 const COLUNAS_MAX: usize = 4;
 /// Altura do cabeçalho de cada cartão (ícone e nome do aplicativo), em px a 100%.
 const CABECALHO: f32 = 50.0;
+/// Ajuste de tamanho (0 a 1) até onde o painel mostra uma lista em vez de miniaturas.
+const LIMITE_LISTA: f32 = 0.1;
 
 // ---------- Geometria e molas ----------
 
@@ -317,7 +319,12 @@ struct Texto {
     centro: *mut c_void,
     esquerda: *mut c_void,
     direita: *mut c_void,
+    /// centralizado, quebrando em até duas linhas (títulos embaixo das miniaturas)
+    centro_duas: *mut c_void,
 }
+
+/// Alinhamento centralizado em até duas linhas (para Rotulo::alinhar).
+const CENTRO_DUAS_LINHAS: i32 = 100;
 
 struct Rotulo {
     texto: String,
@@ -366,6 +373,14 @@ impl Texto {
                 centro: formato(STRING_ALIGN_CENTER),
                 esquerda: formato(STRING_ALIGN_NEAR),
                 direita: formato(STRING_ALIGN_FAR),
+                centro_duas: {
+                    let mut f: *mut c_void = null_mut();
+                    GdipCreateStringFormat(0, 0, &mut f);
+                    GdipSetStringFormatTrimming(f, STRING_TRIMMING_ELLIPSIS);
+                    GdipSetStringFormatAlign(f, STRING_ALIGN_CENTER);
+                    GdipSetStringFormatLineAlign(f, STRING_ALIGN_NEAR);
+                    f
+                },
             })
         }
     }
@@ -374,6 +389,7 @@ impl Texto {
         match alinhar {
             STRING_ALIGN_CENTER => self.centro,
             STRING_ALIGN_FAR => self.direita,
+            CENTRO_DUAS_LINHAS => self.centro_duas,
             _ => self.esquerda,
         }
     }
@@ -414,7 +430,7 @@ impl Texto {
     }
 
     /// Largura do texto em pixels.
-    fn medir(&self, texto: &str, tam: f32) -> f32 {
+    fn medir(&self, texto: &str, tam: f32, semi: bool) -> f32 {
         let estimativa = texto.chars().count() as f32 * tam * 0.55;
         unsafe {
             let mut px = [0u32; 4];
@@ -426,7 +442,7 @@ impl Texto {
             GdipGetImageGraphicsContext(bmp, &mut g);
             GdipSetTextRenderingHint(g, TEXT_RENDERING_ANTIALIAS_GRIDFIT);
             let mut fonte: *mut c_void = null_mut();
-            GdipCreateFont(self.normal, tam, FONT_REGULAR, UNIT_PIXEL, &mut fonte);
+            GdipCreateFont(if semi { self.semi } else { self.normal }, tam, FONT_REGULAR, UNIT_PIXEL, &mut fonte);
             let t = texto.encode_utf16().collect::<Vec<u16>>();
             let caixa = RectF { x: 0.0, y: 0.0, w: 100_000.0, h: tam * 4.0 };
             let mut medida = RectF { x: 0.0, y: 0.0, w: 0.0, h: 0.0 };
@@ -839,6 +855,11 @@ pub struct Painel {
     monitor: Ret,
     pos: (f32, f32),
     lado_inicial: f32,
+    /// lista (ícone e nome inteiro) em vez de miniaturas
+    lista: bool,
+    /// dos ajustes, de 0 a 1: tamanho das miniaturas e parte da tela que o painel pode ocupar
+    pref_tamanho: f32,
+    pref_painel: f32,
 }
 
 impl Painel {
@@ -925,6 +946,9 @@ impl Painel {
                 monitor: Ret::default(),
                 pos: (0.0, 0.0),
                 lado_inicial: 0.0,
+                lista: false,
+                pref_tamanho: 0.6,
+                pref_painel: 0.9,
             })
         }
     }
@@ -993,6 +1017,8 @@ impl Painel {
         let escuro = tema_escuro();
         let c = crate::laco::config_atual();
         self.tema = tema(escuro, cor_destaque(), c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
+        self.pref_tamanho = c.alttab_tamanho / 100.0;
+        self.pref_painel = c.alttab_painel / 100.0;
         unsafe { DwmSetWindowAttribute(self.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, (&(escuro as i32) as *const i32).cast(), 4) };
         aplicar_vidro(self.hwnd, self.tema.acento);
         self.itens = janelas
@@ -1095,9 +1121,9 @@ impl Painel {
     fn organizar(&mut self, dimensionar: bool) -> bool {
         let s = self.escala;
         let (margem, topo, rodape) = (22.0 * s, 70.0 * s, 22.0 * s);
-        let (pad, cab, folga, folga_g, titulo) = (14.0 * s, CABECALHO * s, 12.0 * s, 14.0 * s, 26.0 * s);
+        let (pad, cab, folga, folga_g, titulo) = (14.0 * s, CABECALHO * s, 12.0 * s, 14.0 * s, 40.0 * s);
         let (largura_max, altura_max) = if dimensionar {
-            (self.monitor.w * 0.9 - 2.0 * margem, self.monitor.h * 0.86 - topo - rodape)
+            (self.monitor.w * self.pref_painel - 2.0 * margem, self.monitor.h * self.pref_painel * 0.95 - topo - rodape)
         } else {
             (self.w as f32 - 2.0 * margem, self.h as f32 - topo - rodape)
         };
@@ -1162,9 +1188,17 @@ impl Painel {
             (total, mais_larga)
         };
 
-        // maior miniatura que cabe (na busca, pode crescer um pouco além da de abertura)
+        // Tamanho escolhido nos ajustes; no mínimo, ou se nem a menor miniatura couber, vira lista.
         let minimo = 72.0 * s;
-        let mut lado = if dimensionar { (188.0 * s).min(self.monitor.h * 0.2) } else { (self.lado_inicial * 1.3).max(minimo) };
+        if dimensionar {
+            self.lista = self.pref_tamanho <= LIMITE_LISTA;
+        }
+        if self.lista {
+            return self.organizar_lista(dimensionar);
+        }
+        let preferido = (minimo + (self.pref_tamanho - LIMITE_LISTA) / (1.0 - LIMITE_LISTA) * (280.0 * s - minimo)).min(self.monitor.h * 0.4);
+        // maior miniatura que cabe (na busca, pode crescer um pouco além da de abertura)
+        let mut lado = if dimensionar { preferido } else { (self.lado_inicial * 1.3).max(minimo) };
         let (total, larga) = loop {
             let (total, larga) = posicionar(lado, largura_max, 0.0, 0.0, &mut self.itens, &mut self.grupos);
             if total <= altura_max || lado <= minimo {
@@ -1172,6 +1206,10 @@ impl Painel {
             }
             lado -= 6.0 * s;
         };
+        if dimensionar && total > altura_max {
+            self.lista = true;
+            return self.organizar_lista(true);
+        }
         if dimensionar {
             let pw = (larga.max(520.0 * s) + 2.0 * margem).ceil();
             let ph = (topo + total.max(120.0 * s) + rodape).ceil();
@@ -1201,6 +1239,59 @@ impl Painel {
         true
     }
 
+    /// Lista: uma linha por janela, na ordem de uso, com o ícone e o nome inteiro; quando
+    /// não cabe numa coluna, vira mais colunas lado a lado (preenchendo de cima para baixo).
+    fn organizar_lista(&mut self, dimensionar: bool) -> bool {
+        let s = self.escala;
+        let (margem, topo, rodape) = (22.0 * s, 70.0 * s, 22.0 * s);
+        let (linha, folga, entre_colunas) = (44.0 * s, 6.0 * s, 14.0 * s);
+        let vis: Vec<usize> = (0..self.itens.len()).filter(|&i| self.itens[i].visivel).collect();
+        let n = vis.len().max(1);
+        let (largura_max, altura_max) = if dimensionar {
+            (self.monitor.w * self.pref_painel - 2.0 * margem, self.monitor.h * self.pref_painel * 0.95 - topo - rodape)
+        } else {
+            (self.w as f32 - 2.0 * margem, self.h as f32 - topo - rodape)
+        };
+        let por_coluna_max = (((altura_max + folga) / (linha + folga)).floor() as usize).max(1);
+        let colunas = n.div_ceil(por_coluna_max).max(1);
+        let mut largura_coluna = (640.0 * s).min((largura_max - (colunas - 1) as f32 * entre_colunas) / colunas as f32).max(260.0 * s);
+        let por_coluna = n.div_ceil(colunas);
+        if dimensionar {
+            let conteudo_w = colunas as f32 * largura_coluna + (colunas - 1) as f32 * entre_colunas;
+            let pw = (conteudo_w.max(520.0 * s) + 2.0 * margem).ceil();
+            let ph = (topo + por_coluna as f32 * (linha + folga) - folga + rodape).max(topo + 120.0 * s + rodape).ceil();
+            if !self.garantir_dib(pw as usize, ph as usize) {
+                crate::reg!("Alt+Tab: não consegui criar a imagem do painel ({pw}x{ph})");
+                return false;
+            }
+            let x = (self.monitor.x + (self.monitor.w - pw) / 2.0).round();
+            let y = (self.monitor.y + (self.monitor.h - ph) / 2.0).round();
+            self.pos = (x, y);
+            unsafe {
+                SetWindowPos(self.hwnd, HWND_TOPMOST, x as i32, y as i32, pw as i32, ph as i32, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+            }
+        } else {
+            largura_coluna = largura_coluna.min((self.w as f32 - 2.0 * margem - (colunas - 1) as f32 * entre_colunas) / colunas as f32);
+        }
+        let (pw, ph) = (self.w as f32, self.h as f32);
+        let conteudo_w = colunas as f32 * largura_coluna + (colunas - 1) as f32 * entre_colunas;
+        let x0 = (pw - conteudo_w) / 2.0;
+        for (j, &i) in vis.iter().enumerate() {
+            let (c, l) = ((j / por_coluna) as f32, (j % por_coluna) as f32);
+            self.itens[i].alvo = Ret { x: x0 + c * (largura_coluna + entre_colunas), y: topo + l * (linha + folga), w: largura_coluna, h: linha };
+        }
+        self.grupos.clear();
+        for item in &mut self.itens {
+            item.ret.mirar(item.alvo);
+            item.opac.alvo = if item.visivel { 1.0 } else { 0.0 };
+        }
+        let lb = (420.0 * s).min(pw - 2.0 * margem);
+        self.busca = Ret { x: (pw - lb) / 2.0, y: 18.0 * s, w: lb, h: 36.0 * s };
+        self.limite = Ret { x: 8.0 * s, y: 8.0 * s, w: pw - 16.0 * s, h: ph - 16.0 * s };
+        self.sujo_tudo = true;
+        true
+    }
+
     fn renderizar_base(&mut self) {
         let s = self.escala;
         let (w, h) = (self.w, self.h);
@@ -1211,6 +1302,23 @@ impl Painel {
         let mut rotulos: Vec<Rotulo> = Vec::new();
         let cache = &mut self.cores;
         let cores: Vec<Option<[f32; 3]>> = self.grupos.iter().map(|g| *cache.entry(g.icone).or_insert_with(|| cor_do_icone(g.icone))).collect();
+        // lista: cor do ícone e largura do nome do app de cada linha
+        let tam_lista = 13.5 * s;
+        let linhas: Vec<(usize, Option<[f32; 3]>, f32)> = if self.lista {
+            let texto = &self.texto;
+            self.itens
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| i.visivel)
+                .map(|(k, i)| {
+                    let cor = *cache.entry(i.janela.icone).or_insert_with(|| cor_do_icone(i.janela.icone));
+                    let larg = texto.as_ref().map_or(i.janela.app.chars().count() as f32 * tam_lista * 0.58, |t| t.medir(&i.janela.app, tam_lista, true));
+                    (k, cor, larg)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         {
             let mut tela = Tela { px: &mut self.base, w, h, recorte: todo };
             // vidro: brilho que desce do topo e borda iluminada
@@ -1261,7 +1369,46 @@ impl Painel {
                     rotulos.push(Rotulo { texto: g.n.to_string(), r: p, tam: 12.0 * s, semi: true, cor: tema.texto2, alinhar: STRING_ALIGN_CENTER, sombra: 0 });
                 }
             }
-            for item in self.itens.iter().filter(|i| i.visivel) {
+            // lista: ícone no tamanho normal, nome do app e o título inteiro da janela
+            for &(k, cor, larg) in &linhas {
+                let item = &self.itens[k];
+                let a = item.alvo;
+                let raio = 10.0 * s;
+                tela.preencher(a, raio, tema.cartao);
+                if let Some(c) = cor.filter(|_| tema.tinta_cabecalho > 0.005) {
+                    tela.preencher(a, raio, [c[0], c[1], c[2], tema.tinta_cabecalho * 0.45]);
+                }
+                let lado = 32.0 * s;
+                let yc = a.y + a.h / 2.0;
+                tela.icone(item.janela.icone, a.x + 10.0 * s, yc - lado / 2.0, lado);
+                let xt = a.x + 10.0 * s + lado + 12.0 * s;
+                let fim = a.x + a.w - 12.0 * s;
+                let larg_app = larg.min((fim - xt) * 0.45) + 2.0 * s;
+                rotulos.push(Rotulo {
+                    texto: item.janela.app.clone(),
+                    r: Ret { x: xt, y: yc - 12.0 * s, w: larg_app, h: 24.0 * s },
+                    tam: tam_lista,
+                    semi: true,
+                    cor: tema.texto,
+                    alinhar: STRING_ALIGN_NEAR,
+                    sombra: tema.sombra_texto,
+                });
+                let mut titulo = if item.janela.titulo == item.janela.app { String::new() } else { format!("–  {}", item.janela.titulo) };
+                if item.janela.minimizada {
+                    titulo.push_str("   (minimizada)");
+                }
+                let xt2 = xt + larg_app + 6.0 * s;
+                rotulos.push(Rotulo {
+                    texto: titulo,
+                    r: Ret { x: xt2, y: yc - 12.0 * s, w: fim - xt2, h: 24.0 * s },
+                    tam: tam_lista,
+                    semi: false,
+                    cor: tema.texto2,
+                    alinhar: STRING_ALIGN_NEAR,
+                    sombra: 0,
+                });
+            }
+            for item in self.itens.iter().filter(|i| i.visivel && !self.lista) {
                 let a = item.alvo;
                 if item.thumb == 0 {
                     // minimizada (ou sem miniatura): ícone grande numa vaga de vidro
@@ -1283,11 +1430,11 @@ impl Painel {
                 }
                 rotulos.push(Rotulo {
                     texto: item.janela.titulo.clone(),
-                    r: Ret { x: a.x - 3.0 * s, y: a.y + a.h + 5.0 * s, w: a.w + 6.0 * s, h: 18.0 * s },
+                    r: Ret { x: a.x - 3.0 * s, y: a.y + a.h + 5.0 * s, w: a.w + 6.0 * s, h: 34.0 * s },
                     tam: 11.5 * s,
                     semi: false,
                     cor: tema.texto2,
-                    alinhar: STRING_ALIGN_CENTER, sombra: 0,
+                    alinhar: CENTRO_DUAS_LINHAS, sombra: 0,
                 });
             }
             if n_vis == 0 {
@@ -1325,6 +1472,9 @@ impl Painel {
         let b = item.ret.atual();
         let t = item.abre.x.max(0.0);
         let (sw, sh) = item.fonte;
+        if self.lista {
+            return (b, None);
+        }
         if item.thumb == 0 || sw < 1.0 || sh < 1.0 {
             return (b.escalar(1.0 + 0.05 * t).dentro_de(&self.limite), None);
         }
@@ -1370,7 +1520,7 @@ impl Painel {
         self.t_ant = agora;
 
         // a prévia só abre depois de parar um instante sobre a miniatura
-        let foco = self.hover.filter(|&i| self.mouse_mexeu && self.itens.get(i).is_some_and(|it| it.visivel) && self.hover_desde.elapsed() >= ESPERA_PREVIA);
+        let foco = self.hover.filter(|&i| !self.lista && self.mouse_mexeu && self.itens.get(i).is_some_and(|it| it.visivel) && self.hover_desde.elapsed() >= ESPERA_PREVIA);
         if foco != self.trazido {
             if let Some(i) = foco {
                 self.trazer_para_frente(i);
@@ -1405,7 +1555,8 @@ impl Painel {
                 continue;
             }
             let (r, fonte) = self.geometria(i);
-            let opac = item.opac.x.clamp(0.0, 1.0);
+            // na lista não há miniaturas
+            let opac = if self.lista { 0.0 } else { item.opac.x.clamp(0.0, 1.0) };
             let mut flags = DWM_TNP_RECTDESTINATION | DWM_TNP_OPACITY | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY;
             if fonte.is_some() {
                 flags |= DWM_TNP_RECTSOURCE;
@@ -1498,7 +1649,7 @@ impl Painel {
                 if a > 0.01 && r.w > 120.0 * s && r.h > 80.0 * s {
                     let titulo = self.itens[i].janela.titulo.clone();
                     let tam = 12.5 * s;
-                    let medida = self.texto.as_ref().map_or(titulo.chars().count() as f32 * tam * 0.55, |t| t.medir(&titulo, tam));
+                    let medida = self.texto.as_ref().map_or(titulo.chars().count() as f32 * tam * 0.55, |t| t.medir(&titulo, tam, false));
                     let larg = (medida + 30.0 * s).min(r.w - 24.0 * s);
                     let e = Ret { x: r.x + (r.w - larg) / 2.0, y: r.y + r.h - 40.0 * s, w: larg, h: 28.0 * s };
                     let cor = self.tema.etiqueta;
