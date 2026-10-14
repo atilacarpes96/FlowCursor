@@ -10,7 +10,7 @@ O ponteiro de verdade continua fazendo os cliques; só o desenho muda. Por isso 
 - Ele **liga sozinho com o Windows**. Dá para desligar isso nos ajustes.
 - Na **bandeja** (perto do relógio):
   - clique duplo abre os ajustes;
-  - clique direito mostra: ajustes, ativo, arquivo de configuração, registro e sair.
+  - clique direito mostra: ajustes, ativo, arquivo de configuração, registro, **procurar atualização**, **reportar bug** e sair.
 
 ## Atalhos
 
@@ -34,6 +34,10 @@ O ponteiro de verdade continua fazendo os cliques; só o desenho muda. Por isso 
 - Não precisa segurar o Alt: se soltar com o painel aberto, ele fica lá para você usar o mouse, as setas ou a busca. Fecha sozinho depois de 30 s parado.
 - Um Alt+Tab rápido troca para a janela anterior sem mostrar o painel, como no Windows.
 - Parar o mouse sobre uma miniatura mostra a janela inteira em tamanho grande.
+
+## Atualizar e reportar bug
+
+No topo da tela de ajustes ficam sempre à vista os botões **Procurar atualização** (mostra a versão nova do GitHub e atualiza mantendo os ajustes) e **Reportar bug** (abre uma issue no GitHub já com versão e Windows). Os dois também estão no menu da bandeja.
 
 ## Ajustes
 

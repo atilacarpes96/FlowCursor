@@ -184,6 +184,10 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px co
 }
 .volta.visivel { display: inline-flex; }
 
+.modal-fundo { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); padding: 16px; }
+.modal-fundo[hidden] { display: none; }
+.modal-fundo .caixa { width: min(520px, 100%); background: var(--cartao); backdrop-filter: blur(28px) saturate(170%); border: 1px solid var(--borda-cartao); border-radius: 14px; box-shadow: var(--sombra-cartao); padding: 14px 16px; }
+
 /* Reiniciar, ao lado da chave */
 .reiniciar {
   flex: none; width: 31px; height: 31px; border-radius: 50%; border: 0; padding: 0;
@@ -334,6 +338,8 @@ body.desligado main { opacity: 0.45; pointer-events: none; filter: saturate(0.4)
       <h1>FlowCursor</h1>
       <p id="status">Conectando…</p>
     </div>
+    <button id="btnAtualizar" class="pilula-botao" title="Procura a versão mais nova no GitHub e atualiza">Procurar atualização</button>
+    <button id="btnBug" class="pilula-botao" title="Relatar um problema ou sugerir algo no GitHub">Reportar bug</button>
     <button id="reiniciar" class="reiniciar" title="Reiniciar o FlowCursor: fecha, devolve o ponteiro normal e abre de novo. Resolve a maioria dos travamentos." aria-label="Reiniciar o FlowCursor">↻</button>
     <label class="chave" title="Ligar ou pausar (Ctrl+Alt+F9)">
       <input type="checkbox" id="ativo" aria-label="FlowCursor ativo"><span></span>
@@ -342,6 +348,8 @@ body.desligado main { opacity: 0.45; pointer-events: none; filter: saturate(0.4)
 </header>
 
 <main id="conteudo"></main>
+
+<div id="modalBug" class="modal-fundo" hidden><div class="caixa"><div class="cabeca"><span class="nome">Reportar bug ou sugerir</span><button class="botao-linha fechar">Fechar</button></div></div></div>
 
 <div id="aviso" hidden><b>O FlowCursor foi fechado.</b> Abra o FlowCursor de novo pelo atalho para continuar ajustando.</div>
 
@@ -495,6 +503,63 @@ function montar() {
   direita.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
 }
 
+function formularioRelato(aoEnviar) {
+  const form = el('div', 'relato');
+  form.innerHTML = `<div class="segmentado" data-v="problema"><div class="pilula"></div>
+      <button data-v="problema">Problema</button><button data-v="sugestao">Sugestão</button></div>
+    <input type="text" maxlength="120" placeholder="Resumo em uma linha">
+    <textarea maxlength="4000" placeholder="O que aconteceu, ou o que você gostaria que o FlowCursor fizesse"></textarea>
+    <div class="fim"><span class="legenda">Abre o GitHub com tudo preenchido, mais a versão e o Windows. Precisa de uma conta no GitHub para enviar.</span>
+      <button class="botao-linha forte">Abrir no GitHub</button></div>`;
+  const seg = form.querySelector('.segmentado');
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => seg.dataset.v = b.dataset.v);
+  const titulo = form.querySelector('input'), texto = form.querySelector('textarea');
+  form.querySelector('.fim button').onclick = async () => {
+    if (!titulo.value.trim()) { titulo.focus(); return; }
+    const NL = String.fromCharCode(10);
+    await api('/api/relatar', [seg.dataset.v, titulo.value.split(NL).join(' '), texto.value].join(NL)).catch(desconectado);
+    titulo.value = ''; texto.value = ''; aoEnviar();
+  };
+  return { form, titulo, texto };
+}
+
+// Botões fixos do topo: atualização e relato de bug, sempre à vista.
+function botoesTopo() {
+  const ba = document.getElementById('btnAtualizar'), bb = document.getElementById('btnBug');
+  const status = document.getElementById('status');
+  let pronta = null;
+  const procurar = async (silencioso) => {
+    ba.disabled = true;
+    try {
+      const r = await api('/api/atualizacao');
+      if (r.erro) { if (!silencioso) status.textContent = 'Não deu para procurar atualização: ' + r.erro + '.'; }
+      else if (r.disponivel) { pronta = r.ultima; status.textContent = `Versão ${r.ultima} disponível (você está na ${r.atual}).`; }
+      else if (!silencioso) status.textContent = `Você está na versão mais nova (${r.atual}).`;
+    } catch (e) { if (!silencioso) status.textContent = 'Não deu para procurar agora.'; }
+    ba.disabled = false;
+    ba.textContent = pronta ? `Atualizar para ${pronta}` : 'Procurar atualização';
+    ba.classList.toggle('confirmar', !!pronta);
+  };
+  ba.onclick = async () => {
+    if (!pronta) return procurar(false);
+    ba.disabled = true; ba.textContent = 'Baixando…';
+    status.textContent = 'Baixando e instalando. O FlowCursor fecha e abre de novo sozinho em alguns segundos.';
+    try { await api('/api/atualizar', ''); }
+    catch (e) { status.textContent = e.message || 'A atualização não deu certo.'; ba.disabled = false; ba.textContent = `Atualizar para ${pronta}`; }
+  };
+  setTimeout(() => procurar(true), 800);
+
+  const fundo = document.getElementById('modalBug'), caixa = fundo.querySelector('.caixa');
+  const { form, titulo } = formularioRelato(() => { fundo.hidden = true; });
+  form.classList.add('aberto');
+  caixa.append(form);
+  bb.onclick = () => { fundo.hidden = false; titulo.focus(); };
+  fundo.querySelector('.fechar').onclick = () => { fundo.hidden = true; };
+  fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') fundo.hidden = true; });
+}
+botoesTopo();
+
 function secaoAtualizacao() {
   const sec = el('section');
   sec.append(el('h2', '', 'Atualização e sugestões'));
@@ -540,22 +605,8 @@ function secaoAtualizacao() {
   const cabR = el('div', 'cabeca', '<span class="nome">Relatar problema ou sugerir</span>');
   const abrir = el('button', 'botao-linha', 'Escrever');
   cabR.append(abrir);
-  const form = el('div', 'relato');
-  form.innerHTML = `<div class="segmentado" data-v="problema"><div class="pilula"></div>
-      <button data-v="problema">Problema</button><button data-v="sugestao">Sugestão</button></div>
-    <input type="text" maxlength="120" placeholder="Resumo em uma linha">
-    <textarea maxlength="4000" placeholder="O que aconteceu, ou o que você gostaria que o FlowCursor fizesse"></textarea>
-    <div class="fim"><span class="legenda">Abre o GitHub com tudo preenchido, mais a versão e o Windows. Precisa de uma conta no GitHub para enviar.</span>
-      <button class="botao-linha forte">Abrir no GitHub</button></div>`;
-  const seg = form.querySelector('.segmentado');
-  seg.querySelectorAll('button').forEach(b => b.onclick = () => seg.dataset.v = b.dataset.v);
-  const titulo = form.querySelector('input'), texto = form.querySelector('textarea');
+  const { form, titulo, texto } = formularioRelato(() => form.classList.remove('aberto'));
   abrir.onclick = () => { form.classList.toggle('aberto'); if (form.classList.contains('aberto')) titulo.focus(); };
-  form.querySelector('.fim button').onclick = async () => {
-    if (!titulo.value.trim()) { titulo.focus(); return; }
-    await api('/api/relatar', `${seg.dataset.v}\n${titulo.value.replace(/\n/g, ' ')}\n${texto.value}`).catch(desconectado);
-    titulo.value = ''; texto.value = ''; form.classList.remove('aberto');
-  };
   lr.append(cabR, form);
   cartao.append(lr);
   sec.append(cartao);

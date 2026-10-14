@@ -431,6 +431,43 @@ pub fn abrir_janela() {
     }
 }
 
+/// Menu da bandeja: procura a versão nova; se houver, pergunta e instala (fora da thread da bandeja).
+pub fn procurar_atualizacao_bandeja() {
+    std::thread::spawn(|| unsafe {
+        let aviso = |t: &str| {
+            MessageBoxW(0, w(t).as_ptr(), w("FlowCursor").as_ptr(), MB_OK | MB_ICONINFORMATION);
+        };
+        let atual = env!("CARGO_PKG_VERSION");
+        match crate::atualizacao::ultima() {
+            Ok(l) if crate::atualizacao::mais_nova(&l.versao, atual) => {
+                let t = format!("A versão {} está disponível (você está na {atual}).
+Atualizar agora? Os ajustes são mantidos.", l.versao.trim_start_matches('v'));
+                if MessageBoxW(0, w(&t).as_ptr(), w("FlowCursor").as_ptr(), MB_OKCANCEL | MB_ICONINFORMATION) == 1 {
+                    if let Err(e) = crate::atualizacao::instalar(&l) {
+                        reg!("atualização falhou: {e}");
+                        aviso(&format!("A atualização não deu certo: {e}"));
+                    }
+                }
+            }
+            Ok(_) => aviso(&format!("Você já está na versão mais nova ({atual}).")),
+            Err(e) => aviso(&format!("Não deu para procurar atualização: {e}.")),
+        }
+    });
+}
+
+/// Menu da bandeja: abre uma issue nova no GitHub já com a versão e o Windows.
+pub fn abrir_relato_bug() {
+    let corpo = format!("
+
+---
+FlowCursor {} · {}", env!("CARGO_PKG_VERSION"), versao_windows());
+    let url = format!("https://github.com/{}/issues/new?title={}&body={}&labels=bug", crate::atualizacao::REPOSITORIO, codificar_url("[Problema] "), codificar_url(&corpo));
+    reg!("bandeja: relato de bug aberto no GitHub");
+    unsafe {
+        ShellExecuteW(0, w("open").as_ptr(), w(&url).as_ptr(), null(), null(), SW_SHOWNORMAL);
+    }
+}
+
 /// Fecha a tela de ajustes junto com o FlowCursor (sem o servidor ela não funcionaria).
 pub fn fechar_janela() {
     if let Some(mut f) = JANELA.lock().unwrap_or_else(|e| e.into_inner()).take() {

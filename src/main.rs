@@ -35,6 +35,8 @@ const CMD_ATIVO: usize = 2;
 const CMD_CONFIG: usize = 3;
 const CMD_REGISTRO: usize = 4;
 const CMD_SAIR: usize = 5;
+const CMD_ATUALIZAR: usize = 6;
+const CMD_BUG: usize = 7;
 const ATALHO_PAUSAR: i32 = 1;
 const ATALHO_SAIR: i32 = 2;
 const RELOGIO_CONFIG: usize = 1;
@@ -484,6 +486,9 @@ unsafe fn mostrar_menu(h: HWND) {
     AppendMenuW(menu, MF_STRING, CMD_CONFIG, w("Abrir flowcursor.ini").as_ptr());
     AppendMenuW(menu, MF_STRING, CMD_REGISTRO, w("Abrir registro").as_ptr());
     AppendMenuW(menu, MF_SEPARATOR, 0, null());
+    AppendMenuW(menu, MF_STRING, CMD_ATUALIZAR, w(&format!("Procurar atualização (versão {})", env!("CARGO_PKG_VERSION"))).as_ptr());
+    AppendMenuW(menu, MF_STRING, CMD_BUG, w("Reportar bug…").as_ptr());
+    AppendMenuW(menu, MF_SEPARATOR, 0, null());
     AppendMenuW(menu, MF_STRING, CMD_SAIR, w("Sair\tCtrl+Alt+F10").as_ptr());
     let mut pt = POINT::default();
     GetCursorPos(&mut pt);
@@ -495,6 +500,8 @@ unsafe fn mostrar_menu(h: HWND) {
         CMD_ATIVO => alternar_pausa(h),
         CMD_CONFIG => abrir(config::CAMINHO.get()),
         CMD_REGISTRO => abrir(CAMINHO_REGISTRO.get()),
+        CMD_ATUALIZAR => ui::procurar_atualizacao_bandeja(),
+        CMD_BUG => ui::abrir_relato_bug(),
         CMD_SAIR => PostQuitMessage(0),
         _ => {}
     }
