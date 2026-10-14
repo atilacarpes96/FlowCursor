@@ -491,6 +491,26 @@ extern "system" {
     pub fn RegQueryValueExW(chave: HANDLE, nome: *const u16, reservado: *mut u32, tipo: *mut u32, dados: *mut u8, tam: *mut u32) -> i32;
     pub fn RegDeleteValueW(chave: HANDLE, nome: *const u16) -> i32;
     pub fn RegCloseKey(chave: HANDLE) -> i32;
+    pub fn RegEnumValueW(
+        chave: HANDLE,
+        indice: u32,
+        nome: *mut u16,
+        tam_nome: *mut u32,
+        reservado: *mut u32,
+        tipo: *mut u32,
+        dados: *mut u8,
+        tam: *mut u32,
+    ) -> i32;
+}
+
+#[link(name = "user32", kind = "raw-dylib")]
+extern "system" {
+    pub fn CreateIconFromResourceEx(dados: *const u8, tam: u32, icone: BOOL, versao: u32, cx: i32, cy: i32, flags: u32) -> HANDLE;
+}
+
+#[link(name = "kernel32", kind = "raw-dylib")]
+extern "system" {
+    pub fn ExpandEnvironmentStringsW(origem: *const u16, destino: *mut u16, tam: u32) -> u32;
 }
 
 pub const GWL_STYLE: i32 = -16;

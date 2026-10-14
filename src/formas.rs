@@ -1,7 +1,7 @@
 // Desenho vetorial dos ponteiros por campos de distância (SDF), com borda
 // suavizada, contorno e sombra. Coordenadas locais em pixels a 100% de escala,
 // com o ponto ativo (hotspot) do ponteiro na origem.
-use crate::config::Estilo;
+use crate::temas::{Bitmap, Tema};
 use std::f32::consts::{PI, TAU};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
 
@@ -153,18 +153,42 @@ impl Tipo {
 
 pub type Cor = [f32; 4];
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Paleta {
     pub preenchimento: Cor,
     pub contorno: Cor,
     pub largura: f32,
 }
 
-pub fn paleta(estilo: Estilo) -> Paleta {
-    match estilo {
-        Estilo::Apple => Paleta { preenchimento: [0.03, 0.03, 0.035, 1.0], contorno: [1.0, 1.0, 1.0, 1.0], largura: 1.6 },
-        Estilo::Claro => Paleta { preenchimento: [1.0, 1.0, 1.0, 1.0], contorno: [0.0, 0.0, 0.0, 1.0], largura: 1.3 },
-    }
+/// Desenho das formas de um tema vetorial.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Forma {
+    /// Seta de quinas vivas, como a do macOS e a do Windows.
+    Classica,
+    /// Quinas arredondadas, como o Bibata do Linux.
+    Arredondada,
+    /// Círculo translúcido do iPad no lugar da seta.
+    Circulo,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Vetorial {
+    pub forma: Forma,
+    pub pal: Paleta,
+    /// Degradê de cima para baixo no preenchimento (três paradas), em vez da cor única.
+    pub degrade: Option<[[f32; 3]; 3]>,
+}
+
+pub const MACOS: Vetorial = Vetorial {
+    forma: Forma::Classica,
+    pal: Paleta { preenchimento: [0.03, 0.03, 0.035, 1.0], contorno: [1.0, 1.0, 1.0, 1.0], largura: 1.6 },
+    degrade: None,
+};
+pub const CLARO: Vetorial = Vetorial {
+    forma: Forma::Classica,
+    pal: Paleta { preenchimento: [1.0, 1.0, 1.0, 1.0], contorno: [0.0, 0.0, 0.0, 1.0], largura: 1.3 },
+    degrade: None,
+};
 
 type Sdf = Box<dyn Fn(V2) -> f32>;
 
@@ -177,6 +201,8 @@ struct Parte {
     alfa: Option<Sdf>,
     /// Entra no cálculo da sombra.
     sombra: bool,
+    /// Cor do preenchimento que muda com o ponto (degradê); sem ela vale `preenchimento`.
+    cor: Option<Box<dyn Fn(V2) -> Cor>>,
 }
 
 const SETA: [V2; 7] = [
@@ -256,6 +282,28 @@ fn sd_proibido(p: V2) -> f32 {
     anel.min(sd_capsula(p, v2(-5.3, -5.3), v2(5.3, 5.3), 1.45))
 }
 
+/// Seta de quinas redondas: o polígono por dentro, engordado por `RAIO_SETA_R`.
+const SETA_R: [V2; 7] = [
+    v2(1.35, 1.75),
+    v2(1.35, 15.9),
+    v2(4.95, 12.85),
+    v2(7.55, 18.75),
+    v2(9.15, 18.05),
+    v2(6.65, 12.2),
+    v2(11.0, 12.2),
+];
+const RAIO_SETA_R: f32 = 1.05;
+
+fn sd_seta(forma: Forma) -> Sdf {
+    match forma {
+        Forma::Arredondada => Box::new(|p| sd_poligono(p, &SETA_R) - RAIO_SETA_R),
+        _ => Box::new(|p| sd_poligono(p, &SETA)),
+    }
+}
+
+/// Círculo do iPad, centrado no ponto ativo.
+const RAIO_CIRCULO: f32 = 8.6;
+
 /// Anel do "aguarde": um arco escuro que gira sobre o anel claro.
 fn giro(centro: V2, raio: f32, meia: f32, tempo: f32, pal: &Paleta) -> Parte {
     let fase = (tempo * 1.2).fract() * TAU;
@@ -270,42 +318,72 @@ fn giro(centro: V2, raio: f32, meia: f32, tempo: f32, pal: &Paleta) -> Parte {
             0.12 + 0.88 * g * g
         })),
         sombra: true,
+        cor: None,
     }
 }
 
-fn partes(tipo: Tipo, estilo: Estilo, tempo: f32) -> Vec<Parte> {
-    let pal = paleta(estilo);
-    let simples = |sdf: Sdf, largura: f32| Parte {
+/// Cor do degradê no ponto, de `y0` (primeira parada) a `y1` (última).
+fn cor_degrade(paradas: [[f32; 3]; 3], alfa: f32, y0: f32, y1: f32) -> Box<dyn Fn(V2) -> Cor> {
+    Box::new(move |p: V2| {
+        let u = ((p.y - y0) / (y1 - y0)).clamp(0.0, 1.0) * 2.0;
+        let (k, f) = if u < 1.0 { (0, u) } else { (1, u - 1.0) };
+        let (a, b) = (paradas[k], paradas[k + 1]);
+        [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f, alfa]
+    })
+}
+
+fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
+    let pal = vet.pal;
+    let circulo = vet.forma == Forma::Circulo;
+    // formas centradas ocupam de -10 a 10; a seta, de 0 a 20
+    let simples = |sdf: Sdf, largura: f32, y0: f32| Parte {
         sdf,
         preenchimento: pal.preenchimento,
         contorno: pal.contorno,
         largura,
         alfa: None,
         sombra: true,
+        cor: vet.degrade.map(|d| cor_degrade(d, pal.preenchimento[3], y0, y0 + 20.0)),
+    };
+    let bolha = |sdf: Sdf, alfa: f32| Parte {
+        sdf,
+        preenchimento: [pal.preenchimento[0], pal.preenchimento[1], pal.preenchimento[2], alfa],
+        contorno: pal.contorno,
+        largura: pal.largura,
+        alfa: None,
+        sombra: false,
+        cor: None,
     };
     match tipo {
-        Tipo::Seta => vec![simples(Box::new(|p| sd_poligono(p, &SETA)), pal.largura)],
+        Tipo::Seta if circulo => vec![bolha(Box::new(|p| (p - v2(0.5, 0.5)).len() - RAIO_CIRCULO), pal.preenchimento[3])],
+        Tipo::SetaEspera if circulo => vec![
+            bolha(Box::new(|p| (p - v2(0.5, 0.5)).len() - RAIO_CIRCULO), pal.preenchimento[3]),
+            giro(v2(0.5, 0.5), 4.2, 1.1, tempo, &Paleta { preenchimento: [1.0, 1.0, 1.0, 0.95], ..pal }),
+        ],
+        Tipo::Mao if circulo => vec![bolha(Box::new(|p| (p - v2(0.5, 0.5)).len() - 6.2), (pal.preenchimento[3] + 0.22).min(1.0))],
+        Tipo::Texto if circulo => vec![bolha(Box::new(|p| sd_capsula(p, v2(0.5, -8.0), v2(0.5, 9.0), 1.25)), (pal.preenchimento[3] + 0.2).min(1.0))],
+        Tipo::Seta => vec![simples(sd_seta(vet.forma), pal.largura, 0.5)],
         Tipo::SetaEspera => vec![
-            simples(Box::new(|p| sd_poligono(p, &SETA)), pal.largura),
+            simples(sd_seta(vet.forma), pal.largura, 0.5),
             giro(v2(16.5, 19.5), 4.4, 1.3, tempo, &pal),
         ],
         Tipo::Mao => {
-            // A mão é branca com contorno preto nos dois estilos, como no macOS e no Windows.
+            // A mão é branca com contorno preto em todos os temas, como no macOS e no Windows.
             let branco = [1.0, 1.0, 1.0, 1.0];
             let preto = [0.03, 0.03, 0.035, 1.0];
             vec![
-                Parte { sdf: Box::new(sd_mao), preenchimento: branco, contorno: preto, largura: 1.25, alfa: None, sombra: true },
-                Parte { sdf: Box::new(sd_linhas_mao), preenchimento: preto, contorno: preto, largura: 0.0, alfa: None, sombra: false },
+                Parte { sdf: Box::new(sd_mao), preenchimento: branco, contorno: preto, largura: 1.25, alfa: None, sombra: true, cor: None },
+                Parte { sdf: Box::new(sd_linhas_mao), preenchimento: preto, contorno: preto, largura: 0.0, alfa: None, sombra: false, cor: None },
             ]
         }
-        Tipo::Texto => vec![simples(Box::new(sd_texto), 1.2)],
+        Tipo::Texto => vec![simples(Box::new(sd_texto), 1.2, -9.5)],
         Tipo::Espera => vec![giro(v2(0.5, 0.5), 7.6, 1.7, tempo, &pal)],
-        Tipo::RedimH => vec![simples(redim(0.0), 1.3)],
-        Tipo::RedimV => vec![simples(redim(PI / 2.0), 1.3)],
-        Tipo::RedimNwse => vec![simples(redim(PI / 4.0), 1.3)],
-        Tipo::RedimNesw => vec![simples(redim(-PI / 4.0), 1.3)],
-        Tipo::Mover => vec![simples(Box::new(sd_mover), 1.3)],
-        Tipo::Cruz => vec![simples(Box::new(sd_cruz), 1.1)],
+        Tipo::RedimH => vec![simples(redim(0.0), 1.3, -9.5)],
+        Tipo::RedimV => vec![simples(redim(PI / 2.0), 1.3, -9.5)],
+        Tipo::RedimNwse => vec![simples(redim(PI / 4.0), 1.3, -9.5)],
+        Tipo::RedimNesw => vec![simples(redim(-PI / 4.0), 1.3, -9.5)],
+        Tipo::Mover => vec![simples(Box::new(sd_mover), 1.3, -9.5)],
+        Tipo::Cruz => vec![simples(Box::new(sd_cruz), 1.1, -9.5)],
         Tipo::Proibido => vec![Parte {
             sdf: Box::new(sd_proibido),
             preenchimento: [0.92, 0.23, 0.2, 1.0],
@@ -313,6 +391,7 @@ fn partes(tipo: Tipo, estilo: Estilo, tempo: f32) -> Vec<Parte> {
             largura: 1.2,
             alfa: None,
             sombra: true,
+            cor: None,
         }],
     }
 }
@@ -360,7 +439,8 @@ fn pixel(partes: &[Parte], p: V2, ps: V2, s: f32, sombra: &Sombra) -> Cor {
             if let Some(f) = &pt.alfa {
                 cob *= f(p);
             }
-            c = sobre(premul(pt.preenchimento, cob), c);
+            let cor = pt.cor.as_ref().map_or(pt.preenchimento, |f| f(p));
+            c = sobre(premul(cor, cob), c);
         }
     }
     c
@@ -389,30 +469,48 @@ impl Sprite {
         Sprite { w: 0, h: 0, ox: 0, oy: 0, px: Vec::new(), ativos: Vec::new() }
     }
 
-    pub fn renderizar(&mut self, camadas: &[Camada], estilo: Estilo, sombra: f32, tempo: f32) {
-        let s_max = camadas.iter().map(|c| c.escala).fold(0.1, f32::max);
-        let lo = (-18.0 * s_max).floor() as i32 - 3;
-        let hi = (30.0 * s_max).ceil() as i32 + 4;
-        let lado = (hi - lo) as usize;
-        self.w = lado;
-        self.h = lado;
-        self.ox = -lo;
-        self.oy = -lo;
+    pub fn renderizar(&mut self, camadas: &[Camada], tema: &Tema, sombra: f32, tempo: f32) {
+        // Caixa de desenho: as formas vetoriais cabem em -18..30; as imagens, no próprio tamanho.
+        let (mut min, mut max) = (v2(f32::MAX, f32::MAX), v2(f32::MIN, f32::MIN));
+        for cam in camadas {
+            let (a, b) = tema.imagem(cam.tipo, tempo).map_or((v2(-18.0, -18.0), v2(30.0, 30.0)), Bitmap::extensao);
+            let s = cam.escala;
+            min = v2(min.x.min(a.x * s), min.y.min(a.y * s));
+            max = v2(max.x.max(b.x * s), max.y.max(b.y * s + 1.3 * s));
+        }
+        let (x0, y0) = (min.x.floor() as i32 - 4, min.y.floor() as i32 - 4);
+        let (x1, y1) = (max.x.ceil() as i32 + 5, max.y.ceil() as i32 + 5);
+        self.w = (x1 - x0).max(1) as usize;
+        self.h = (y1 - y0).max(1) as usize;
+        self.ox = -x0;
+        self.oy = -y0;
         self.px.clear();
-        self.px.resize(lado * lado, [0.0; 4]);
+        self.px.resize(self.w * self.h, [0.0; 4]);
         for cam in camadas {
             if cam.alfa <= 0.001 {
                 continue;
             }
-            let partes = partes(cam.tipo, estilo, tempo);
             let s = cam.escala;
             let sb = Sombra { opacidade: sombra / 100.0, desloc: v2(0.0, 1.3 * s), raio: 2.2 * s };
-            for j in 0..lado {
-                for i in 0..lado {
+            let imagem = tema.imagem(cam.tipo, tempo);
+            let partes = if imagem.is_none() { partes(cam.tipo, &tema.vetor, tempo) } else { Vec::new() };
+            for j in 0..self.h {
+                for i in 0..self.w {
                     let ptela = v2(i as f32 + 0.5 - self.ox as f32, j as f32 + 0.5 - self.oy as f32);
-                    let c = pixel(&partes, ptela / s, (ptela - sb.desloc) / s, s, &sb);
+                    let c = match imagem {
+                        Some(b) => {
+                            // a imagem já costuma trazer sombra própria: a nossa entra mais fraca
+                            let mut c = b.amostrar(ptela / s, s);
+                            if sb.opacidade > 0.0 && c[3] < 0.999 {
+                                let a = b.alfa_borrado((ptela - sb.desloc) / s, sb.raio / s) * sb.opacidade * 0.6;
+                                c = sobre(c, [0.0, 0.0, 0.0, a]);
+                            }
+                            c
+                        }
+                        None => pixel(&partes, ptela / s, (ptela - sb.desloc) / s, s, &sb),
+                    };
                     if c[3] > 0.0 {
-                        let d = &mut self.px[j * lado + i];
+                        let d = &mut self.px[j * self.w + i];
                         for k in 0..4 {
                             d[k] += c[k] * cam.alfa;
                         }
@@ -434,7 +532,7 @@ impl Sprite {
 pub fn icone_app(lado: usize) -> Vec<u8> {
     let n = lado as f32;
     let s = n / 64.0;
-    let partes = partes(Tipo::Seta, Estilo::Apple, 0.0);
+    let partes = partes(Tipo::Seta, &MACOS, 0.0);
     let esc = 1.65 * s;
     let desloc = v2(22.0 * s, 14.0 * s);
     let sb = Sombra { opacidade: 0.45, desloc: v2(0.0, 1.2 * esc), raio: 1.6 * esc };
@@ -477,10 +575,10 @@ pub fn icone_app(lado: usize) -> Vec<u8> {
     out
 }
 
-/// Ícone da bandeja: a seta no estilo Apple, em BGRA não pré-multiplicado.
+/// Ícone da bandeja: a seta do tema macOS, em BGRA não pré-multiplicado.
 pub fn icone(lado: usize) -> Vec<u32> {
     let s = lado as f32 / 24.0;
-    let partes = partes(Tipo::Seta, Estilo::Apple, 0.0);
+    let partes = partes(Tipo::Seta, &MACOS, 0.0);
     let sb = Sombra { opacidade: 0.0, desloc: v2(0.0, 0.0), raio: 1.0 };
     // centraliza a seta (caixa local aproximada 0..13 x 0..20)
     let desloc = v2((lado as f32 - 13.5 * s) / 2.0, (lado as f32 - 20.6 * s) / 2.0);

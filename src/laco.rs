@@ -139,6 +139,8 @@ pub fn executar() {
             ultima_conferencia = Instant::now();
             if !sistema::seta_em_branco() {
                 reg!("os cursores do sistema voltaram (outro programa ou Configurações); escondendo de novo");
+                // pode ter sido troca do esquema de ponteiros: o tema "Windows" lê de novo
+                crate::temas::recarregar();
                 sistema::esconder_cursores();
             }
         }

@@ -58,7 +58,7 @@ pub fn salvar_ico(caminho: &Path, imagens: &[(usize, Vec<u8>)]) -> std::io::Resu
     std::fs::write(caminho, saida)
 }
 
-fn codificar(w: usize, h: usize, rgba: &[u8]) -> Vec<u8> {
+pub fn codificar(w: usize, h: usize, rgba: &[u8]) -> Vec<u8> {
     let mut cru = Vec::with_capacity((w * 4 + 1) * h);
     for y in 0..h {
         cru.push(0);

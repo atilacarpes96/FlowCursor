@@ -38,7 +38,7 @@ A tela grava no mesmo arquivo.
 
 | chave | o que faz |
 |---|---|
-| `estilo` | `apple` (preto com borda branca) ou `claro` (branco com borda preta) |
+| `tema` | Desenhados pelo FlowCursor: `macos`, `claro`, `bibata`, `bibata_gelo`, `ipados`, `aurora`, `cores` (com `cor_preenchimento` e `cor_contorno` em RRGGBB). Do Windows: `windows` (os originais) ou `esquema:<nome>`. Seus: `pasta:<nome>`, uma pasta dentro de `cursores\` com .cur, .ani ou .png (ou um pacote com install.inf) |
 | `tamanho` | 1.0 = tamanho do ponteiro padrão |
 | `responsividade` | quanto o desenho cola no ponteiro real (100 = sem mola) |
 | `elasticidade` | quanto passa do ponto e volta |

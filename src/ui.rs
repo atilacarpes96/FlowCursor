@@ -115,13 +115,52 @@ fn ler_pedido(s: &mut TcpStream) -> Option<Pedido> {
 }
 
 fn responder(s: &mut TcpStream, codigo: &str, tipo: &str, corpo: &str) -> std::io::Result<()> {
+    responder_bytes(s, codigo, tipo, corpo.as_bytes())
+}
+
+fn responder_bytes(s: &mut TcpStream, codigo: &str, tipo: &str, corpo: &[u8]) -> std::io::Result<()> {
     let cab = format!(
         "HTTP/1.1 {codigo}\r\nContent-Type: {tipo}\r\nContent-Length: {}\r\nCache-Control: no-store\r\n\
          X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
         corpo.len()
     );
     s.write_all(cab.as_bytes())?;
-    s.write_all(corpo.as_bytes())
+    s.write_all(corpo)
+}
+
+/// Valor de um parâmetro da consulta (?id=...), com os %XX decodificados.
+fn parametro(consulta: &str, nome: &str) -> Option<String> {
+    let v = consulta.split('&').find_map(|par| par.strip_prefix(nome)?.strip_prefix('='))?;
+    let b = v.as_bytes();
+    let mut saida = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'%' if i + 2 < b.len() => {
+                let hex = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok());
+                match hex {
+                    Some(x) => {
+                        saida.push(x);
+                        i += 3;
+                        continue;
+                    }
+                    None => saida.push(b'%'),
+                }
+            }
+            b'+' => saida.push(b' '),
+            c => saida.push(c),
+        }
+        i += 1;
+    }
+    Some(String::from_utf8_lossy(&saida).into_owned())
+}
+
+fn temas_json() -> String {
+    let itens: Vec<String> = crate::temas::listar()
+        .iter()
+        .map(|t| format!("{{\"id\":{},\"nome\":{},\"grupo\":{},\"detalhe\":{}}}", json_texto(&t.id), json_texto(&t.nome), json_texto(t.grupo), json_texto(&t.detalhe)))
+        .collect();
+    format!("{{\"temas\":[{}],\"pasta\":{}}}", itens.join(","), json_texto(&crate::temas::pasta_temas().to_string_lossy()))
 }
 
 fn estado_json() -> String {
@@ -205,6 +244,32 @@ fn atender(mut s: TcpStream, porta: u16, chave: &str) -> std::io::Result<()> {
         ("GET", "/") => responder(&mut s, "200 OK", "text/html; charset=utf-8", PAGINA),
         ("GET", "/icone.svg") => responder(&mut s, "200 OK", "image/svg+xml", ICONE_SVG),
         ("GET", "/api/estado") => responder(&mut s, "200 OK", json, &estado_json()),
+        ("GET", "/api/temas") => responder(&mut s, "200 OK", json, &temas_json()),
+        ("GET", "/api/previa") => {
+            let id = parametro(&p.consulta, "id").unwrap_or_default();
+            let mut cfg = laco::config_atual();
+            // as cores ainda não gravadas (enquanto arrasta o seletor de cor)
+            for k in ["cor_preenchimento", "cor_contorno"] {
+                if let Some(v) = parametro(&p.consulta, k).filter(|v| crate::temas::cor_hex(v).is_some()) {
+                    if k == "cor_preenchimento" { cfg.cor_preenchimento = v } else { cfg.cor_contorno = v }
+                }
+            }
+            responder_bytes(&mut s, "200 OK", "image/png", &crate::temas::previa_png(&id, &cfg))
+        }
+        ("POST", "/api/pasta_temas") => {
+            let pasta = crate::temas::pasta_temas();
+            let _ = std::fs::create_dir_all(&pasta);
+            let leia = pasta.join("COMO USAR.txt");
+            if !leia.exists() {
+                let _ = std::fs::write(&leia, crate::temas::LEIA_ME.replace('\n', "\r\n"));
+            }
+            abrir_arquivo(&pasta);
+            responder(&mut s, "200 OK", json, "{}")
+        }
+        ("POST", "/api/recarregar_temas") => {
+            crate::temas::recarregar();
+            responder(&mut s, "200 OK", json, &temas_json())
+        }
         ("POST", "/api/config") => {
             let (cfg, avisos) = config::analisar(&p.corpo);
             if !avisos.is_empty() {

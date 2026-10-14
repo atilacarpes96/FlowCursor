@@ -224,6 +224,35 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px co
 }
 .segmentado svg { width: 15px; height: 22px; overflow: visible; }
 
+/* Temas do ponteiro */
+.grupo-tema { margin: 12px 0 6px; font-size: 12px; font-weight: 600; color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.03em; }
+.grade-temas { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.tema-cartao {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden;
+  border-radius: 12px; border: 1px solid var(--borda-cartao); background: var(--seg-fundo);
+  color: var(--texto); font: inherit; text-align: left; cursor: pointer;
+  transition: transform .15s, box-shadow .2s, border-color .2s;
+}
+.tema-cartao:hover { transform: translateY(-1px); }
+.tema-cartao:active { transform: scale(0.97); }
+.tema-cartao.escolhido { border-color: var(--destaque); box-shadow: 0 0 0 2px var(--destaque); }
+.tema-cartao .vitrine {
+  display: grid; place-items: center; height: 46px;
+  background: linear-gradient(120deg, #5ac8fa, #5e5ce6 55%, #bf5af2);
+}
+.tema-cartao img { width: 128px; height: 32px; image-rendering: auto; }
+.tema-cartao b { padding: 7px 10px 0; font-size: 13.5px; font-weight: 600; }
+.tema-cartao small { padding: 1px 10px 8px; font-size: 11.5px; color: var(--texto-2); line-height: 1.25; }
+.cores-tema { display: none; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+.cores-tema.visivel { display: flex; }
+.cores-tema label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.cores-tema input[type=color] {
+  width: 38px; height: 28px; padding: 0; border: 1px solid var(--separador); border-radius: 8px; background: none; cursor: pointer;
+}
+.cores-tema input[type=color]::-webkit-color-swatch-wrapper { padding: 2px; }
+.cores-tema input[type=color]::-webkit-color-swatch { border: 0; border-radius: 6px; }
+.pasta-temas { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+
 /* Área de teste */
 .grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--separador); }
 .ladrilho {
@@ -336,13 +365,10 @@ async function api(rota, corpo) {
 }
 
 const pct = v => Math.round(v) + '%';
-const SETA = '0.5,0.5 0.5,17.5 4.5,13.8 7.3,20.1 9.9,19 7.2,12.9 12.5,12.9';
-const seta = (fill, borda, larg) =>
-  `<svg viewBox="-2 -2 17 25"><polygon points="${SETA}" fill="${fill}" stroke="${borda}" stroke-width="${larg}" stroke-linejoin="round" paint-order="stroke"/></svg>`;
 
 const SECOES = [
   { titulo: 'Aparência', linhas: [
-    { tipo: 'estilo', nome: 'Estilo' },
+    { tipo: 'tema', nome: 'Tema' },
     { id: 'tamanho', nome: 'Tamanho', min: 0.5, max: 3, passo: 0.05, fmt: v => Math.round(v * 100) + '%',
       legenda: '100% é o tamanho do ponteiro padrão do Windows.' },
     { id: 'sombra', nome: 'Sombra', min: 0, max: 100, passo: 1, fmt: pct },
@@ -525,19 +551,66 @@ function secaoAtualizacao() {
 }
 
 function linha(l) {  const d = el('div', 'linha');
-  if (l.tipo === 'estilo') {
+  if (l.tipo === 'tema') {
     const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
-    cab.append(botaoVolta('estilo'));
-    d.append(cab);
-    const seg = el('div', 'segmentado');
-    seg.innerHTML = `<div class="pilula"></div>
-      <button data-v="apple">${seta('#0b0b0d', '#fff', 3.2)}Escuro</button>
-      <button data-v="claro">${seta('#fff', '#000', 2.6)}Claro</button>`;
-    seg.querySelectorAll('button').forEach(b => b.onclick = () => {
-      cfg.estilo = b.dataset.v; seg.dataset.v = b.dataset.v; enviar(); diferencas();
+    cab.append(botaoVolta('tema'));
+    d.append(cab, el('div', 'legenda', 'Os do FlowCursor são desenhados na hora e ficam nítidos em qualquer tamanho.'));
+    const lista = el('div');
+    const cores = el('div', 'cores-tema');
+    cores.innerHTML = '<label><input type="color" data-k="cor_preenchimento">Miolo</label><label><input type="color" data-k="cor_contorno">Borda</label>';
+    const pasta = el('div', 'pasta-temas',
+      '<span class="legenda">Seus temas: pastas com cursores .cur, .ani ou .png (ou um pacote com install.inf) dentro da pasta cursores.</span>');
+    const abrirPasta = el('button', 'botao-linha', 'Abrir pasta');
+    abrirPasta.onclick = () => api('/api/pasta_temas', '').catch(desconectado);
+    pasta.append(abrirPasta);
+    d.append(lista, cores, pasta);
+    let versao = 0;
+    const previa = id => `/api/previa?id=${encodeURIComponent(id)}&t=${CHAVE}&v=${versao}` +
+      (id === 'cores' && cfg ? `&cor_preenchimento=${cfg.cor_preenchimento}&cor_contorno=${cfg.cor_contorno}` : '');
+    const marcar = v => {
+      lista.querySelectorAll('.tema-cartao').forEach(c => c.classList.toggle('escolhido', c.dataset.id === v));
+      cores.classList.toggle('visivel', v === 'cores');
+    };
+    const desenhar = temas => {
+      lista.innerHTML = '';
+      let grupo = null, grade = null;
+      for (const t of temas) {
+        if (t.grupo !== grupo) {
+          grupo = t.grupo;
+          lista.append(el('div', 'grupo-tema', { FlowCursor: 'Do FlowCursor', Windows: 'Do Windows', Seus: 'Seus' }[grupo] || grupo));
+          grade = el('div', 'grade-temas');
+          lista.append(grade);
+        }
+        const c = el('button', 'tema-cartao');
+        c.dataset.id = t.id;
+        c.title = t.detalhe;
+        c.innerHTML = `<span class="vitrine"><img alt="" loading="lazy"></span><b></b><small></small>`;
+        c.querySelector('img').src = previa(t.id);
+        c.querySelector('b').textContent = t.nome;
+        c.querySelector('small').textContent = t.detalhe;
+        c.onclick = () => { cfg.tema = t.id; marcar(t.id); enviar(); diferencas(); };
+        grade.append(c);
+      }
+      if (cfg) marcar(cfg.tema);
+    };
+    const carregar = (rota, corpo) => api(rota, corpo).then(r => { versao++; desenhar(r.temas); }).catch(() => {});
+    carregar('/api/temas');
+    // ao voltar para a janela (talvez com uma pasta nova em cursores), lê a lista de novo
+    window.addEventListener('focus', () => carregar('/api/recarregar_temas', ''));
+    let espera = 0;
+    cores.querySelectorAll('input').forEach(i => i.oninput = () => {
+      cfg[i.dataset.k] = i.value.slice(1);
+      enviar();
+      clearTimeout(espera);
+      espera = setTimeout(() => {
+        const img = lista.querySelector('.tema-cartao[data-id="cores"] img');
+        if (img) img.src = previa('cores');
+      }, 120);
     });
-    controles.estilo = { definir: v => seg.dataset.v = v };
-    d.append(seg);
+    const corInput = k => cores.querySelector(`[data-k=${k}]`);
+    controles.tema = { definir: marcar };
+    controles.cor_preenchimento = { definir: v => corInput('cor_preenchimento').value = '#' + v };
+    controles.cor_contorno = { definir: v => corInput('cor_contorno').value = '#' + v };
   } else if (l.tipo === 'chave') {
     const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
     const lab = el('label', 'chave', `<input type="checkbox"><span></span>`);

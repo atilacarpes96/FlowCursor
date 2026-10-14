@@ -1,9 +1,11 @@
 // Motor do ponteiro: física de mola, borrão de movimento, rastro e onda do clique.
 // Não depende de janelas; recebe a posição real e devolve a imagem do quadro.
-use crate::config::{Config, Estilo};
-use crate::formas::{paleta, premul, smoothstep, sobre, v2, Camada, Cor, Sprite, Tipo, V2};
+use crate::config::Config;
+use crate::formas::{premul, smoothstep, sobre, v2, Camada, Cor, Sprite, Tipo, V2};
+use crate::temas::{self, Tema};
 use std::collections::VecDeque;
 use std::f32::consts::TAU;
+use std::sync::Arc;
 
 const DURACAO_ONDA: f64 = 0.38;
 const LADO_MAXIMO: usize = 1600;
@@ -46,9 +48,9 @@ struct ChaveSprite {
     anterior: Option<Tipo>,
     transicao: u16,
     escala: u32,
-    estilo: Estilo,
+    tema: u64,
     sombra: u16,
-    fase: u16,
+    fase: u32,
 }
 
 pub struct Quadro<'a> {
@@ -79,6 +81,7 @@ pub struct Motor {
     sprite_rastro: Sprite,
     chave_sprite: Option<ChaveSprite>,
     versao_sprite: u64,
+    tema: Option<Arc<Tema>>,
     ultimo: Option<(i64, i64, u64)>,
     forcar: bool,
     camada: Vec<Cor>,
@@ -106,6 +109,7 @@ impl Motor {
             sprite_rastro: Sprite::novo(),
             chave_sprite: None,
             versao_sprite: 0,
+            tema: None,
             ultimo: None,
             forcar: true,
             camada: Vec::new(),
@@ -217,16 +221,17 @@ impl Motor {
             self.rastro.clear();
         }
 
-        // Sprites: só redesenha quando forma, escala, estilo ou animação mudam.
+        // Sprites: só redesenha quando forma, escala, tema ou animação mudam.
+        let tema = temas::obter(cfg);
         let escala_total = escala_base * self.escala.x;
-        let animado = self.tipo.animado() || self.tipo_ant.is_some_and(|x| x.animado());
-        let fase = if animado { ((t * 1.2).fract() * 720.0) as u16 } else { 0 };
+        let tempo = (t % 1000.0) as f32;
+        let fase = tema.fase(self.tipo, tempo) ^ self.tipo_ant.map_or(0, |a| tema.fase(a, tempo) << 16);
         let chave = ChaveSprite {
             tipo: self.tipo,
             anterior: self.tipo_ant,
             transicao: (self.transicao * 1000.0) as u16,
             escala: (escala_total * 2000.0) as u32,
-            estilo: cfg.estilo,
+            tema: tema.serie,
             sombra: cfg.sombra as u16,
             fase,
         };
@@ -239,12 +244,12 @@ impl Motor {
             } else {
                 camadas.push(Camada { tipo: self.tipo, alfa: 1.0, escala: escala_total });
             }
-            let tempo = (t % 1000.0) as f32;
-            self.sprite.renderizar(&camadas, cfg.estilo, cfg.sombra, tempo);
-            self.sprite_rastro.renderizar(&camadas, cfg.estilo, 0.0, tempo);
+            self.sprite.renderizar(&camadas, &tema, cfg.sombra, tempo);
+            self.sprite_rastro.renderizar(&camadas, &tema, 0.0, tempo);
             self.chave_sprite = Some(chave);
             self.versao_sprite += 1;
         }
+        self.tema = Some(tema);
 
         let v0 = cfg.rastro_velocidade;
         let rastro_visivel = self.rastro.len() > 1
@@ -307,7 +312,7 @@ impl Motor {
             self.desenhar_rastro(t, origem, w, h, escala_base, comp, cfg);
         }
         if !self.ondas.is_empty() {
-            let pal = paleta(cfg.estilo);
+            let pal = self.tema.as_ref().map_or(crate::formas::MACOS.pal, |t| t.paleta());
             self.desenhar_ondas(t, origem, w, h, escala_base, &pal.preenchimento, &pal.contorno);
         }
 

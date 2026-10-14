@@ -1,7 +1,7 @@
 // Ferramentas de conferência, sem esconder o ponteiro de verdade:
 //   --galeria <pasta>      imagens das formas e dos efeitos de movimento
 //   --diagnostico <arq>    sincronia, cursores do sistema e desempenho do motor
-use crate::config::{Config, Estilo};
+use crate::config::Config;
 use crate::ffi::*;
 use crate::formas::{v2, Tipo, V2};
 use crate::motor::{Motor, Quadro};
@@ -109,14 +109,14 @@ fn movimento(img: &mut Imagem, cfg: &Config, t_fim: f64, caminho: impl Fn(f64) -
 pub fn gerar(pasta: &Path) {
     let _ = std::fs::create_dir_all(pasta);
 
-    // 1) Formas paradas, nos dois estilos, sobre branco, escuro e degradê (ampliado 3x).
+    // 1) Formas paradas de cada tema, sobre branco, escuro e degradê (ampliado 3x).
     let celula = 56usize;
     let colunas = 6;
     let tipos = Tipo::TODOS;
     let linhas_por_fundo = tipos.len().div_ceil(colunas);
     let fundos = 3;
-    for estilo in [Estilo::Apple, Estilo::Claro] {
-        let cfg = Config { estilo, ..Config::default() };
+    for info in crate::temas::listar() {
+        let cfg = Config { tema: info.id.clone(), ..Config::default() };
         let mut img = Imagem::nova(celula * colunas, celula * linhas_por_fundo * fundos);
         for f in 0..fundos {
             let y0 = f * celula * linhas_por_fundo;
@@ -132,8 +132,8 @@ pub fn gerar(pasta: &Path) {
                 parado(&mut img, tipo, (cx * celula) as f32 + dx, (y0 + cy * celula) as f32 + dy, &cfg, 0.3);
             }
         }
-        let nome = if estilo == Estilo::Apple { "formas_apple.png" } else { "formas_claro.png" };
-        img.salvar(&pasta.join(nome), 3);
+        let nome: String = info.id.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+        img.salvar(&pasta.join(format!("formas_{nome}.png")), 3);
     }
 
     // 2) Movimento: retas em três velocidades, uma curva e o clique, sobre branco e escuro.

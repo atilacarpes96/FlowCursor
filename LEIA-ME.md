@@ -38,7 +38,7 @@ O ponteiro de verdade continua fazendo os cliques; só o desenho muda. Por isso 
 ## Ajustes
 
 Pela tela de ajustes, as mudanças valem na hora e há uma área de teste com todos os ponteiros:
-- **Estilo:** preto com borda branca, ou branco com borda preta.
+- **Tema:** macOS, Claro, Bibata, Bibata Gelo, iPadOS, Aurora ou suas cores; os cursores originais do Windows (e os esquemas instalados nele); ou temas seus, numa pasta dentro de `cursores` com arquivos .cur, .ani ou .png (o botão *Abrir pasta* mostra onde e explica os nomes).
 - **Tamanho**.
 - **Mola:**
   - responsividade: quanto o desenho gruda no ponteiro;

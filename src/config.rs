@@ -6,7 +6,11 @@ use std::time::SystemTime;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
-    pub estilo: Estilo,
+    /// Identificador do tema (veja temas.rs): macos, claro, ..., windows, esquema:<nome>, pasta:<nome>.
+    pub tema: String,
+    /// Cores do tema "cores", em RRGGBB.
+    pub cor_preenchimento: String,
+    pub cor_contorno: String,
     pub tamanho: f32,
     pub responsividade: f32,
     pub elasticidade: f32,
@@ -27,16 +31,12 @@ pub struct Config {
     pub alttab_painel: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Estilo {
-    Apple,
-    Claro,
-}
-
 impl Default for Config {
     fn default() -> Self {
         Config {
-            estilo: Estilo::Apple,
+            tema: "macos".into(),
+            cor_preenchimento: "ff9f0a".into(),
+            cor_contorno: "ffffff".into(),
             tamanho: 1.0,
             responsividade: 75.0,
             elasticidade: 10.0,
@@ -71,7 +71,10 @@ pub const MODELO: &str = "\
 # Atalhos: Ctrl+Alt+F9 pausa/retoma, Ctrl+Alt+F10 fecha e devolve o ponteiro normal.
 
 # Aparencia
-estilo = apple            # apple (preto com borda branca) ou claro (branco com borda preta)
+tema = macos              # macos, claro, bibata, bibata_gelo, ipados, aurora, cores, windows (os originais),
+                          # esquema:<nome> (instalado no Windows) ou pasta:<nome> (dentro da pasta cursores)
+cor_preenchimento = ff9f0a # tema cores: cor de dentro, em RRGGBB
+cor_contorno = ffffff     # tema cores: cor da borda
 tamanho = 1.0             # 1.0 = tamanho do ponteiro padrao do Windows
 sombra = 35               # 0 a 100
 
@@ -125,11 +128,16 @@ pub fn analisar(texto: &str) -> (Config, Vec<String>) {
         let (k, v) = (k.trim().to_lowercase(), v.trim());
         let num = |faixa: (f32, f32)| v.replace(',', ".").parse::<f32>().ok().map(|x| x.clamp(faixa.0, faixa.1));
         let ok = match k.as_str() {
-            "estilo" => match v.to_lowercase().as_str() {
-                "apple" | "mac" | "macos" => Some(c.estilo = Estilo::Apple),
-                "claro" | "windows" | "fluent" => Some(c.estilo = Estilo::Claro),
-                _ => None,
+            // "estilo" é o nome antigo (até a 0.4.2): apple ou claro (que aceitava "windows")
+            "tema" | "estilo" => match v.to_lowercase().as_str() {
+                "" => None,
+                "apple" | "mac" => Some(c.tema = "macos".into()),
+                "windows" | "fluent" if k == "estilo" => Some(c.tema = "claro".into()),
+                x if x.contains(':') => Some(c.tema = v.to_string()),
+                x => Some(c.tema = x.to_string()),
             },
+            "cor_preenchimento" => crate::temas::cor_hex(v).map(|_| c.cor_preenchimento = v.trim_start_matches('#').to_lowercase()),
+            "cor_contorno" => crate::temas::cor_hex(v).map(|_| c.cor_contorno = v.trim_start_matches('#').to_lowercase()),
             "tamanho" => num((0.5, 4.0)).map(|x| c.tamanho = x),
             "responsividade" => num((0.0, 100.0)).map(|x| c.responsividade = x),
             "elasticidade" => num((0.0, 100.0)).map(|x| c.elasticidade = x),
@@ -180,7 +188,9 @@ fn numero(x: f32) -> String {
 pub fn pares(c: &Config) -> Vec<(&'static str, String)> {
     let sn = |b: bool| if b { "sim" } else { "nao" }.to_string();
     vec![
-        ("estilo", if c.estilo == Estilo::Apple { "apple" } else { "claro" }.to_string()),
+        ("tema", c.tema.clone()),
+        ("cor_preenchimento", c.cor_preenchimento.clone()),
+        ("cor_contorno", c.cor_contorno.clone()),
         ("tamanho", numero(c.tamanho)),
         ("sombra", numero(c.sombra)),
         ("responsividade", numero(c.responsividade)),
@@ -226,6 +236,8 @@ pub fn para_json(c: &Config) -> String {
     let campos: Vec<String> = pares(c)
         .into_iter()
         .map(|(k, v)| match v.as_str() {
+            // textos que podem parecer número ("000000") ou ter aspas
+            _ if k == "tema" || k.starts_with("cor_") => format!("\"{k}\":\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\"")),
             "sim" => format!("\"{k}\":true"),
             "nao" => format!("\"{k}\":false"),
             _ if v.parse::<f64>().is_ok() => format!("\"{k}\":{v}"),

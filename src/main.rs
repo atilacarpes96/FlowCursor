@@ -16,6 +16,7 @@ mod overlay;
 mod png;
 mod registro;
 mod sistema;
+mod temas;
 mod ui;
 
 use ffi::*;
