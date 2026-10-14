@@ -368,7 +368,6 @@ const pct = v => Math.round(v) + '%';
 
 const SECOES = [
   { titulo: 'Aparência', linhas: [
-    { tipo: 'tema', nome: 'Tema' },
     { id: 'tamanho', nome: 'Tamanho', min: 0.5, max: 3, passo: 0.05, fmt: v => Math.round(v * 100) + '%',
       legenda: '100% é o tamanho do ponteiro padrão do Windows.' },
     { id: 'sombra', nome: 'Sombra', min: 0, max: 100, passo: 1, fmt: pct },
@@ -458,6 +457,19 @@ function montar() {
     (s.coluna === 'direita' ? direita : main).append(sec);
   }
 
+  // embaixo, lado a lado: a área de teste e os temas (escolhe e já testa ao lado)
+  const baixo = el('div', 'colunas');
+  const baixoEsq = el('div', 'coluna');
+  const baixoDir = el('div', 'coluna');
+  baixo.append(baixoEsq, baixoDir);
+  conteudo.append(baixo);
+  const secTema = el('section');
+  secTema.append(el('h2', '', 'Tema do ponteiro'));
+  const cartaoTema = el('div', 'cartao');
+  cartaoTema.append(linha({ tipo: 'tema', nome: 'Tema' }));
+  secTema.append(cartaoTema);
+  baixoDir.append(secTema);
+
   const sec = el('section');
   sec.append(el('h2', '', 'Área de teste'));
   const cartao = el('div', 'cartao');
@@ -468,8 +480,8 @@ function montar() {
     grade.append(t);
   }
   cartao.append(grade, el('div', 'pista', '<span>Mova o mouse rápido por aqui</span>'));
-  sec.append(cartao, el('p', 'rodape', 'Passe o mouse nos quadrados para ver cada forma. As mudanças acima valem na hora.'));
-  main.append(sec);
+  sec.append(cartao, el('p', 'rodape', 'Passe o mouse nos quadrados para ver cada forma. Os ajustes e o tema valem na hora.'));
+  baixoEsq.append(sec);
 
   direita.append(secaoAtualizacao());
 
