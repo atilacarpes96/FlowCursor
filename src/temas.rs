@@ -848,34 +848,35 @@ unsafe fn desenhar(icone: HANDLE, w: usize, h: usize, fundo: u32) -> Option<Vec<
 
 // ---------- Prévia para a tela de ajustes ----------
 
-/// Seta, mão, texto e espera lado a lado, em PNG com fundo transparente (2x, para telas nítidas).
-pub fn previa_png(id: &str, cfg: &Config) -> Vec<u8> {
+/// Seta, mão, texto e espera lado a lado, em PNG com fundo transparente, `escala` vezes o
+/// tamanho normal (2 na tela de ajustes, para telas nítidas).
+pub fn previa_png(id: &str, cfg: &Config, escala: f32) -> Vec<u8> {
     // "cores" não usa o guardado: a prévia vem com as cores que ainda estão sendo escolhidas
     let tema = if id == cfg.tema && id != "cores" { obter(cfg) } else { Arc::new(carregar(id, cfg)) };
-    const CELULA: usize = 64;
+    let celula = (32.0 * escala).round() as usize;
     let tipos = [Tipo::Seta, Tipo::Mao, Tipo::Texto, Tipo::Espera];
-    let (w, h) = (CELULA * tipos.len(), CELULA);
+    let (w, h) = (celula * tipos.len(), celula);
     let mut acum = vec![[0.0f32; 4]; w * h];
     let mut sp = Sprite::novo();
     for (k, &tipo) in tipos.iter().enumerate() {
-        let mut s = 2.0;
+        let mut s = escala;
         // imagens grandes (esquemas "extra grande") são reduzidas para caber
         for _ in 0..2 {
             sp.renderizar(&[Camada { tipo, alfa: 1.0, escala: s }], &tema, cfg.sombra, 0.35);
             let (a, b) = caixa(&sp);
             let lado = (b.0 - a.0).max(b.1 - a.1) as f32;
-            if lado <= (CELULA - 6) as f32 {
+            if lado <= (celula - 6) as f32 {
                 break;
             }
-            s *= (CELULA - 6) as f32 / lado;
+            s *= (celula - 6) as f32 / lado;
         }
         let (a, b) = caixa(&sp);
-        let dx = (k * CELULA) as i32 + (CELULA as i32 - (b.0 - a.0)) / 2 - a.0;
-        let dy = (CELULA as i32 - (b.1 - a.1)) / 2 - a.1;
+        let dx = (k * celula) as i32 + (celula as i32 - (b.0 - a.0)) / 2 - a.0;
+        let dy = (celula as i32 - (b.1 - a.1)) / 2 - a.1;
         for j in 0..sp.h {
             for i in 0..sp.w {
                 let (x, y) = (i as i32 + dx, j as i32 + dy);
-                if x < (k * CELULA) as i32 || x >= ((k + 1) * CELULA) as i32 || y < 0 || y >= h as i32 {
+                if x < (k * celula) as i32 || x >= ((k + 1) * celula) as i32 || y < 0 || y >= h as i32 {
                     continue;
                 }
                 acum[y as usize * w + x as usize] = sp.px[j * sp.w + i];

@@ -116,6 +116,24 @@ fn main() {
             }
             return;
         }
+        Some("--previas") => {
+            // imagens grandes de cada tema (para vídeos e para o README)
+            let pasta = Path::new(args.get(2).map_or("previas", String::as_str));
+            let escala: f32 = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(6.0);
+            let _ = std::fs::create_dir_all(pasta);
+            let mut cfg = config::Config::default();
+            for t in temas::listar() {
+                cfg.tema = t.id.clone();
+                let nome: String = t.id.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+                let _ = std::fs::write(pasta.join(format!("{nome}.png")), temas::previa_png(&t.id, &cfg, escala));
+            }
+            for cor in args.iter().skip(4) {
+                cfg.tema = "cores".into();
+                cfg.cor_preenchimento = cor.clone();
+                let _ = std::fs::write(pasta.join(format!("cores_{cor}.png")), temas::previa_png("cores", &cfg, escala));
+            }
+            return;
+        }
         Some("--diagnostico") => {
             galeria::diagnostico(Path::new(args.get(2).map_or("diagnostico.txt", String::as_str)));
             return;

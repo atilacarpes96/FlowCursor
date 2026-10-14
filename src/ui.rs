@@ -254,7 +254,7 @@ fn atender(mut s: TcpStream, porta: u16, chave: &str) -> std::io::Result<()> {
                     if k == "cor_preenchimento" { cfg.cor_preenchimento = v } else { cfg.cor_contorno = v }
                 }
             }
-            responder_bytes(&mut s, "200 OK", "image/png", &crate::temas::previa_png(&id, &cfg))
+            responder_bytes(&mut s, "200 OK", "image/png", &crate::temas::previa_png(&id, &cfg, 2.0))
         }
         ("POST", "/api/pasta_temas") => {
             let pasta = crate::temas::pasta_temas();
