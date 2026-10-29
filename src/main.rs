@@ -17,6 +17,8 @@ mod png;
 mod registro;
 mod sistema;
 mod temas;
+mod alvo;
+mod captura;
 mod ui;
 
 use ffi::*;
@@ -114,6 +116,20 @@ fn main() {
                 Ok(_) => reg!("atualização: já está na versão mais nova"),
                 Err(e) => reg!("atualização: {e}"),
             }
+            return;
+        }
+        Some("--teste-alvo") => {
+            let n = |i: usize| args.get(i).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let _ = std::fs::write(std::env::temp_dir().join("flowcursor_alvo.txt"), alvo::testar(n(2), n(3)));
+            return;
+        }
+        Some("--foto-vidro") => {
+            let tipo = match args.get(3).map(String::as_str) {
+                Some("texto") => formas::Tipo::Texto,
+                Some("mao") => formas::Tipo::Mao,
+                _ => formas::Tipo::Seta,
+            };
+            galeria::foto_vidro(Path::new(args.get(2).map_or("vidro.png", String::as_str)), tipo, args.get(4).map_or("cristal", String::as_str));
             return;
         }
         Some("--previas") => {

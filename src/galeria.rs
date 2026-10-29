@@ -249,3 +249,39 @@ pub fn diagnostico(caminho: &Path) {
     );
     let _ = std::fs::write(caminho, s);
 }
+
+/// Foto do tema Cristal de verdade: copia a tela em volta do ponteiro, monta um quadro do
+/// motor ali e salva os dois juntos (ampliado). As janelas do FlowCursor ficam fora das
+/// capturas de tela com o vidro ligado, então esta é a forma de conferir o resultado.
+pub fn foto_vidro(caminho: &Path, tipo: Tipo, tema: &str) {
+    unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
+    crate::captura::iniciar(&crate::laco::SAIR);
+    crate::captura::ATIVA.store(true, std::sync::atomic::Ordering::Relaxed);
+    std::thread::sleep(Duration::from_millis(300));
+    let Some(f) = crate::captura::atual() else { return };
+    let cfg = Config { tema: tema.into(), ..Config::default() };
+    let (cx, cy) = (f.x + f.w as i32 / 2, f.y + f.h as i32 / 2);
+    let dpi = sistema::escala_dpi(POINT { x: cx, y: cy });
+    let mut m = Motor::novo();
+    let mut img = Imagem::nova(160, 120);
+    let (x0, y0) = (cx - 60, cy - 40);
+    for j in 0..img.h {
+        for i in 0..img.w {
+            if let Some((n, _)) = f.em(x0 + i as i32, y0 + j as i32) {
+                img.px[j * img.w + i] = n;
+            }
+        }
+    }
+    let mut t = 0.0;
+    let mut ultimo = None;
+    while t < 0.4 {
+        if let Some(q) = m.quadro(t, v2(cx as f32, cy as f32), tipo, false, dpi, &cfg) {
+            ultimo = Some(Quadro { x: q.x - x0, y: q.y - y0, w: q.w, h: q.h, px: q.px.to_vec().leak() });
+        }
+        t += DT;
+    }
+    if let Some(q) = ultimo {
+        img.colar(&q);
+    }
+    img.salvar(caminho, 4);
+}

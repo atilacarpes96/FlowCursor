@@ -166,6 +166,11 @@ impl Tema {
         }
     }
 
+    /// Precisa do fundo da tela (vidro de verdade).
+    pub fn usa_fundo(&self) -> bool {
+        self.vetor.forma.vidro() && self.imagens.is_empty()
+    }
+
     pub fn paleta(&self) -> Paleta {
         self.vetor.pal
     }
@@ -181,7 +186,9 @@ pub struct Info {
 }
 
 /// Temas vetoriais, na ordem da tela de ajustes.
-const VETORIAIS: [(&str, &str, &str); 7] = [
+const VETORIAIS: [(&str, &str, &str); 9] = [
+    ("cristal", "Cristal", "Vidro de verdade, na sua cor"),
+    ("lente", "Lente líquida", "Vidro limpo que amplia a tela"),
     ("macos", "macOS", "Preto com borda branca"),
     ("claro", "Claro", "Branco com borda preta"),
     ("bibata", "Bibata", "Arredondado, do Linux"),
@@ -215,6 +222,8 @@ fn vetorial(id: &str, cfg: &Config) -> Option<Vetorial> {
             pal: pal([0.369, 0.361, 0.902, 1.0], branco, 1.6),
             degrade: Some([[0.353, 0.784, 0.98], [0.369, 0.361, 0.902], [0.749, 0.353, 0.949]]),
         },
+        "cristal" => Vetorial { forma: Forma::Cristal, pal: pal(cor_hex(&cfg.cor_preenchimento).unwrap_or([1.0, 0.62, 0.04, 1.0]), branco, 1.15), degrade: None },
+        "lente" => Vetorial { forma: Forma::Lente, pal: pal([1.0, 1.0, 1.0, 1.0], branco, 0.8), degrade: None },
         "cores" => Vetorial {
             forma: Forma::Classica,
             pal: pal(cor_hex(&cfg.cor_preenchimento).unwrap_or(preto), cor_hex(&cfg.cor_contorno).unwrap_or(branco), 1.5),
@@ -289,7 +298,7 @@ pub fn obter(cfg: &Config) -> Arc<Tema> {
     let revisao = REVISAO.load(Relaxed);
     let mut c = CACHE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(x) = c.as_ref() {
-        if x.id == cfg.tema && x.revisao == revisao && (cfg.tema != "cores" || (x.cores.0 == cfg.cor_preenchimento && x.cores.1 == cfg.cor_contorno)) {
+        if x.id == cfg.tema && x.revisao == revisao && (!matches!(cfg.tema.as_str(), "cores" | "cristal") || (x.cores.0 == cfg.cor_preenchimento && x.cores.1 == cfg.cor_contorno)) {
             return x.tema.clone();
         }
     }
@@ -852,7 +861,7 @@ unsafe fn desenhar(icone: HANDLE, w: usize, h: usize, fundo: u32) -> Option<Vec<
 /// tamanho normal (2 na tela de ajustes, para telas nítidas).
 pub fn previa_png(id: &str, cfg: &Config, escala: f32) -> Vec<u8> {
     // "cores" não usa o guardado: a prévia vem com as cores que ainda estão sendo escolhidas
-    let tema = if id == cfg.tema && id != "cores" { obter(cfg) } else { Arc::new(carregar(id, cfg)) };
+    let tema = if id == cfg.tema && !matches!(id, "cores" | "cristal") { obter(cfg) } else { Arc::new(carregar(id, cfg)) };
     let celula = (32.0 * escala).round() as usize;
     let tipos = [Tipo::Seta, Tipo::Mao, Tipo::Texto, Tipo::Espera];
     let (w, h) = (celula * tipos.len(), celula);

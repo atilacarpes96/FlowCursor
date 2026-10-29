@@ -989,3 +989,13 @@ extern "system" {
     pub fn WinHttpReadData(h: HANDLE, buf: *mut c_void, ler: u32, lidos: *mut u32) -> BOOL;
     pub fn WinHttpCloseHandle(h: HANDLE) -> BOOL;
 }
+
+// ---------- Vidro do tema Cristal ----------
+
+/// A janela some de capturas e cópias de tela (Windows 10 2004 em diante).
+pub const WDA_EXCLUDEFROMCAPTURE: u32 = 0x0000_0011;
+
+#[link(name = "user32", kind = "raw-dylib")]
+extern "system" {
+    pub fn SetWindowDisplayAffinity(h: HWND, afinidade: u32) -> BOOL;
+}

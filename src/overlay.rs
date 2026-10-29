@@ -152,6 +152,10 @@ impl Overlay {
         }
     }
 
+    pub fn hwnd(&self) -> HWND {
+        self.hwnd
+    }
+
     pub fn esconder(&mut self) {
         if self.visivel {
             unsafe { ShowWindow(self.hwnd, SW_HIDE) };

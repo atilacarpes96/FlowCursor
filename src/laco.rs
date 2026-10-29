@@ -101,6 +101,9 @@ pub fn executar() {
     let mut sumico: Option<(Instant, u32, isize)> = None;
     let mut sumicos_registrados = 0u32;
     let mut vistas_acima: HashSet<isize> = HashSet::new();
+    let mut com_fundo = false;
+    crate::captura::iniciar(&SAIR);
+    crate::alvo::iniciar(&SAIR);
 
     while !SAIR.load(Relaxed) {
         vblank.esperar();
@@ -115,6 +118,15 @@ pub fn executar() {
             // sem resetar o motor: na tela de ajustes a mudança aparece enquanto o ponteiro anda
             versao = v;
             cfg = config_atual();
+        }
+        // Tema de vidro: copia a tela atrás do ponteiro, sem o próprio desenho na cópia.
+        let precisa_fundo = crate::temas::obter(&cfg).usa_fundo();
+        crate::alvo::ATIVO.store(precisa_fundo && cfg.grudar_botoes, Relaxed);
+        if precisa_fundo != com_fundo {
+            com_fundo = precisa_fundo;
+            crate::captura::excluir_da_captura(janela.hwnd(), com_fundo);
+            crate::captura::ATIVA.store(com_fundo, Relaxed);
+            reg!("vidro: cópia da tela {}", if com_fundo { "ligada" } else { "desligada" });
         }
 
         // Pausado, tela bloqueada, menu Iniciar, tela cheia...: ponteiro normal do Windows.

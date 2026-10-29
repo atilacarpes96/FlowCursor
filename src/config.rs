@@ -23,6 +23,8 @@ pub struct Config {
     pub clique: bool,
     pub onda_clique: bool,
     pub desativar_tela_cheia: bool,
+    /// Temas de vidro: o ponteiro vira uma pílula do tamanho do botão embaixo dele.
+    pub grudar_botoes: bool,
     pub alternador: bool,
     pub alttab_transparencia: f32,
     pub alttab_fosco: f32,
@@ -49,6 +51,7 @@ impl Default for Config {
             clique: true,
             onda_clique: true,
             desativar_tela_cheia: true,
+            grudar_botoes: true,
             alternador: true,
             alttab_transparencia: 85.0,
             alttab_fosco: 50.0,
@@ -90,6 +93,7 @@ rastro_intensidade = 55   # 0 a 100. Opacidade do rastro
 rastro_velocidade = 1200  # pixels por segundo a partir dos quais o rastro aparece
 clique = sim              # o ponteiro encolhe um pouco ao clicar
 onda_clique = sim         # onda que se abre no ponto do clique
+grudar_botoes = sim       # temas de vidro: o ponteiro gruda no botao embaixo dele, no formato do botao
 
 # Compatibilidade
 desativar_tela_cheia = sim  # jogos e videos em tela cheia usam o ponteiro normal
@@ -149,6 +153,7 @@ pub fn analisar(texto: &str) -> (Config, Vec<String>) {
             "sombra" => num((0.0, 100.0)).map(|x| c.sombra = x),
             "clique" => sim_nao(v).map(|x| c.clique = x),
             "onda_clique" => sim_nao(v).map(|x| c.onda_clique = x),
+            "grudar_botoes" => sim_nao(v).map(|x| c.grudar_botoes = x),
             "desativar_tela_cheia" => sim_nao(v).map(|x| c.desativar_tela_cheia = x),
             "alternador" => sim_nao(v).map(|x| c.alternador = x),
             "alttab_transparencia" => num((0.0, 100.0)).map(|x| c.alttab_transparencia = x),
@@ -202,6 +207,7 @@ pub fn pares(c: &Config) -> Vec<(&'static str, String)> {
         ("rastro_velocidade", numero(c.rastro_velocidade)),
         ("clique", sn(c.clique)),
         ("onda_clique", sn(c.onda_clique)),
+        ("grudar_botoes", sn(c.grudar_botoes)),
         ("desativar_tela_cheia", sn(c.desativar_tela_cheia)),
         ("alternador", sn(c.alternador)),
         ("alttab_transparencia", numero(c.alttab_transparencia)),

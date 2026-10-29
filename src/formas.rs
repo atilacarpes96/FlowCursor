@@ -4,6 +4,7 @@
 use crate::temas::{Bitmap, Tema};
 use std::f32::consts::{PI, TAU};
 use std::ops::{Add, AddAssign, Div, Mul, Sub};
+use std::rc::Rc;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub struct V2 {
@@ -169,6 +170,17 @@ pub enum Forma {
     Arredondada,
     /// Círculo translúcido do iPad no lugar da seta.
     Circulo,
+    /// Seta sem cauda de vidro: o fundo atrás aparece meio desfocado, com borda escura e luz.
+    Cristal,
+    /// Vidro limpo, gordo e redondo, que mostra a tela atrás ampliada.
+    Lente,
+}
+
+impl Forma {
+    /// Desenhada com vidro: o motor põe a tela de trás por baixo.
+    pub fn vidro(self) -> bool {
+        matches!(self, Forma::Cristal | Forma::Lente)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -203,6 +215,8 @@ struct Parte {
     sombra: bool,
     /// Cor do preenchimento que muda com o ponto (degradê); sem ela vale `preenchimento`.
     cor: Option<Box<dyn Fn(V2) -> Cor>>,
+    /// Miolo de vidro: o motor mostra o fundo da tela (desfocado) por baixo dele.
+    vidro: bool,
 }
 
 const SETA: [V2; 7] = [
@@ -319,6 +333,7 @@ fn giro(centro: V2, raio: f32, meia: f32, tempo: f32, pal: &Paleta) -> Parte {
         })),
         sombra: true,
         cor: None,
+        vidro: false,
     }
 }
 
@@ -332,8 +347,133 @@ fn cor_degrade(paradas: [[f32; 3]; 3], alfa: f32, y0: f32, y1: f32) -> Box<dyn F
     })
 }
 
+/// Seta sem cauda, como a do Figma (a ponta no ponto ativo).
+const SETA_SC: [V2; 4] = [v2(0.0, 0.0), v2(0.0, 19.5), v2(5.67, 13.93), v2(14.1, 13.93)];
+
+/// Polígono com as quinas de fora arredondadas no raio `r`: devolve o polígono encolhido
+/// (que, engordado de `r`, volta ao tamanho original) e o deslocamento que mantém a
+/// primeira ponta no lugar (uma ponta arredondada recua).
+fn arredondar(poli: &[V2], r: f32) -> (Vec<V2>, V2) {
+    let n = poli.len();
+    let centro = poli.iter().fold(V2::default(), |a, &b| a + b) / n as f32;
+    // reta de cada lado, empurrada `r` para dentro
+    let retas: Vec<(V2, V2)> = (0..n)
+        .map(|i| {
+            let (a, b) = (poli[i], poli[(i + 1) % n]);
+            let e = b - a;
+            let mut nn = v2(-e.y, e.x) / e.len();
+            if nn.dot(centro - a) < 0.0 {
+                nn = nn * -1.0;
+            }
+            (a + nn * r, e)
+        })
+        .collect();
+    let dentro: Vec<V2> = (0..n)
+        .map(|i| {
+            let (p1, d1) = retas[(i + n - 1) % n];
+            let (p2, d2) = retas[i];
+            let cruz = d1.x * d2.y - d1.y * d2.x;
+            if cruz.abs() < 1e-6 {
+                return p2;
+            }
+            let t = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / cruz;
+            p1 + d1 * t
+        })
+        .collect();
+    let dir = poli[0] - dentro[0];
+    let ponta = dentro[0] + dir / dir.len().max(1e-6) * r;
+    (dentro, poli[0] - ponta)
+}
+
+/// Uma forma de vidro. Cristal: miolo fosco com a cor do tema bem leve, contorno escuro na
+/// mesma cor, linha clara por dentro e luz na borda de cima. Lente: vidro limpo (o motor
+/// mostra a tela ampliada), fio branco na borda, luz em cima e sombra suave embaixo.
+fn vidro_partes(sdf: Rc<dyn Fn(V2) -> f32>, pal: &Paleta, lente: bool) -> Vec<Parte> {
+    let c = pal.preenchimento;
+    let (miolo, contorno, largura, linha) = if lente {
+        ([1.0, 1.0, 1.0, 0.03], [0.08, 0.08, 0.16, 0.3], 0.8, [1.0, 1.0, 1.0, 0.95])
+    } else {
+        let a = 0.26;
+        let tinta = [((c[0] * 0.14 + 0.12) / a).min(1.0), ((c[1] * 0.14 + 0.12) / a).min(1.0), ((c[2] * 0.14 + 0.12) / a).min(1.0), a];
+        (tinta, [c[0] * 0.35, c[1] * 0.35, c[2] * 0.35, 0.85], 1.15, [1.0, 1.0, 1.0, 0.75])
+    };
+    let (meio_linha, larg_linha) = if lente { (0.4, 0.4) } else { (0.75, 0.5) };
+    // luz numa faixa por dentro da borda, conforme o lado para onde a borda está virada
+    let faixa = |s: Rc<dyn Fn(V2) -> f32>, centro: f32, meia: f32, cor: Cor, dir: V2| {
+        let (s1, g) = (s.clone(), s);
+        Parte {
+            sdf: Box::new(move |p| (s1(p) + centro).abs() - meia),
+            preenchimento: cor,
+            contorno: [0.0; 4],
+            largura: 0.0,
+            alfa: Some(Box::new(move |p: V2| {
+                let e = 0.35;
+                let n = v2(g(p + v2(e, 0.0)) - g(p - v2(e, 0.0)), g(p + v2(0.0, e)) - g(p - v2(0.0, e)));
+                let luz = (-n.dot(dir) / n.len().max(1e-4)).max(0.0);
+                let f = 1.0 - ((g(p) + centro).abs() / meia).min(1.0);
+                luz * luz * f
+            })),
+            sombra: false,
+            cor: None,
+            vidro: false,
+        }
+    };
+    let s0 = sdf.clone();
+    let s1 = sdf.clone();
+    let mut v = vec![
+        Parte { sdf: Box::new(move |p| s0(p)), preenchimento: miolo, contorno, largura, alfa: None, sombra: true, cor: None, vidro: true },
+        Parte {
+            sdf: Box::new(move |p| (s1(p) + meio_linha).abs() - larg_linha),
+            preenchimento: linha,
+            contorno: [0.0; 4],
+            largura: 0.0,
+            alfa: None,
+            sombra: false,
+            cor: None,
+            vidro: false,
+        },
+        faixa(sdf.clone(), 2.6, 1.7, [1.0, 1.0, 1.0, if lente { 0.55 } else { 0.5 }], v2(0.55, 0.83)),
+    ];
+    if lente {
+        v.push(faixa(sdf, 2.4, 1.9, [0.08, 0.08, 0.2, 0.16], v2(-0.55, -0.83)));
+    }
+    v
+}
+
+fn partes_vidro(tipo: Tipo, pal: &Paleta, tempo: f32, lente: bool) -> Vec<Parte> {
+    let forma: Rc<dyn Fn(V2) -> f32> = match tipo {
+        Tipo::Seta | Tipo::SetaEspera if lente => {
+            // a lente é gorda e redonda, como uma bala de goma
+            let r = 2.6;
+            let (dentro, desloc) = arredondar(&SETA_SC, r);
+            Rc::new(move |p| sd_poligono(p - desloc, &dentro) - r)
+        }
+        Tipo::Seta | Tipo::SetaEspera => Rc::new(|p| sd_poligono(p, &SETA_SC)),
+        Tipo::Texto => Rc::new(move |p| sd_capsula(p, v2(0.5, -8.5), v2(0.5, 8.5), if lente { 3.0 } else { 2.5 })),
+        Tipo::Mao => Rc::new(|p| (p - v2(0.5, 0.5)).len() - 8.0),
+        Tipo::Espera => Rc::new(|p| ((p - v2(0.5, 0.5)).len() - 7.6).abs() - 2.4),
+        Tipo::RedimH => Rc::new(|p| sd_seta_dupla(p - v2(0.5, 0.5)) - 0.8),
+        Tipo::RedimV => Rc::new(|p| sd_seta_dupla((p - v2(0.5, 0.5)).girar(-PI / 2.0)) - 0.8),
+        Tipo::RedimNwse => Rc::new(|p| sd_seta_dupla((p - v2(0.5, 0.5)).girar(-PI / 4.0)) - 0.8),
+        Tipo::RedimNesw => Rc::new(|p| sd_seta_dupla((p - v2(0.5, 0.5)).girar(PI / 4.0)) - 0.8),
+        Tipo::Mover => Rc::new(|p| sd_mover(p) - 0.8),
+        Tipo::Cruz => Rc::new(|p| sd_cruz(p) - 0.8),
+        Tipo::Proibido => Rc::new(sd_proibido),
+    };
+    let mut v = vidro_partes(forma, pal, lente);
+    match tipo {
+        Tipo::SetaEspera => v.push(giro(v2(16.5, 19.5), 4.4, 1.1, tempo, &Paleta { preenchimento: [1.0, 1.0, 1.0, 0.9], contorno: [0.0; 4], ..*pal })),
+        Tipo::Espera => v.push(giro(v2(0.5, 0.5), 7.6, 1.0, tempo, &Paleta { preenchimento: [1.0, 1.0, 1.0, 0.85], contorno: [0.0; 4], ..*pal })),
+        _ => {}
+    }
+    v
+}
+
 fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
     let pal = vet.pal;
+    if vet.forma.vidro() {
+        return partes_vidro(tipo, &pal, tempo, vet.forma == Forma::Lente);
+    }
     let circulo = vet.forma == Forma::Circulo;
     // formas centradas ocupam de -10 a 10; a seta, de 0 a 20
     let simples = |sdf: Sdf, largura: f32, y0: f32| Parte {
@@ -344,6 +484,7 @@ fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
         alfa: None,
         sombra: true,
         cor: vet.degrade.map(|d| cor_degrade(d, pal.preenchimento[3], y0, y0 + 20.0)),
+        vidro: false,
     };
     let bolha = |sdf: Sdf, alfa: f32| Parte {
         sdf,
@@ -353,6 +494,7 @@ fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
         alfa: None,
         sombra: false,
         cor: None,
+        vidro: false,
     };
     match tipo {
         Tipo::Seta if circulo => vec![bolha(Box::new(|p| (p - v2(0.5, 0.5)).len() - RAIO_CIRCULO), pal.preenchimento[3])],
@@ -372,8 +514,8 @@ fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
             let branco = [1.0, 1.0, 1.0, 1.0];
             let preto = [0.03, 0.03, 0.035, 1.0];
             vec![
-                Parte { sdf: Box::new(sd_mao), preenchimento: branco, contorno: preto, largura: 1.25, alfa: None, sombra: true, cor: None },
-                Parte { sdf: Box::new(sd_linhas_mao), preenchimento: preto, contorno: preto, largura: 0.0, alfa: None, sombra: false, cor: None },
+                Parte { sdf: Box::new(sd_mao), preenchimento: branco, contorno: preto, largura: 1.25, alfa: None, sombra: true, cor: None, vidro: false },
+                Parte { sdf: Box::new(sd_linhas_mao), preenchimento: preto, contorno: preto, largura: 0.0, alfa: None, sombra: false, cor: None, vidro: false },
             ]
         }
         Tipo::Texto => vec![simples(Box::new(sd_texto), 1.2, -9.5)],
@@ -392,6 +534,7 @@ fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
             alfa: None,
             sombra: true,
             cor: None,
+            vidro: false,
         }],
     }
 }
@@ -415,21 +558,36 @@ struct Sombra {
     raio: f32,
 }
 
-/// Cor de um pixel. `p` em coordenadas locais; `ps` é o ponto deslocado da sombra.
-fn pixel(partes: &[Parte], p: V2, ps: V2, s: f32, sombra: &Sombra) -> Cor {
+/// Cor de um pixel e o quanto ele é miolo de vidro (cobertura e proximidade da borda).
+/// `p` em coordenadas locais; `ps` é o ponto deslocado da sombra.
+fn pixel(partes: &[Parte], p: V2, ps: V2, s: f32, sombra: &Sombra) -> (Cor, [f32; 2]) {
     let mut c = [0.0; 4];
+    let mut vidro = [0.0f32, 0.0];
+    for pt in partes.iter().filter(|x| x.vidro) {
+        let d = (pt.sdf)(p);
+        let cob = (0.5 - d * s).clamp(0.0, 1.0);
+        if cob > vidro[0] {
+            // a borda (até 4 unidades para dentro) fica mais desfocada que o meio
+            vidro = [cob, 1.0 - smoothstep(0.0, 4.0, -d)];
+        }
+    }
     if sombra.opacidade > 0.0 {
         let mut sil = f32::MAX;
         for pt in partes.iter().filter(|x| x.sombra) {
             sil = sil.min((pt.sdf)(ps) * s - pt.largura * s);
         }
-        let a = sombra.opacidade * (1.0 - smoothstep(-sombra.raio, sombra.raio, sil));
+        // a sombra não aparece através do vidro
+        let a = sombra.opacidade * (1.0 - smoothstep(-sombra.raio, sombra.raio, sil)) * (1.0 - vidro[0]);
         c = [0.0, 0.0, 0.0, a];
     }
     for pt in partes {
         let d = (pt.sdf)(p) * s;
         if pt.largura > 0.0 {
-            let cob = (0.5 - (d - pt.largura * s)).clamp(0.0, 1.0);
+            let mut cob = (0.5 - (d - pt.largura * s)).clamp(0.0, 1.0);
+            if pt.vidro {
+                // miolo translúcido: o contorno fica só do lado de fora
+                cob -= (0.5 - d).clamp(0.0, 1.0);
+            }
             if cob > 0.0 {
                 c = sobre(premul(pt.contorno, cob), c);
             }
@@ -443,7 +601,7 @@ fn pixel(partes: &[Parte], p: V2, ps: V2, s: f32, sombra: &Sombra) -> Cor {
             c = sobre(premul(cor, cob), c);
         }
     }
-    c
+    (c, vidro)
 }
 
 /// Uma forma a desenhar no sprite (mais de uma durante a troca de forma).
@@ -462,11 +620,15 @@ pub struct Sprite {
     pub px: Vec<Cor>,
     /// Índices dos pixels não transparentes (acelera o borrão).
     pub ativos: Vec<u32>,
+    /// Por pixel: [cobertura do miolo de vidro, proximidade da borda]; vazio sem vidro.
+    pub vidro: Vec<[f32; 2]>,
+    /// Centro do vidro, em pixels do sprite (a lente amplia a partir dele).
+    pub centro: V2,
 }
 
 impl Sprite {
     pub fn novo() -> Self {
-        Sprite { w: 0, h: 0, ox: 0, oy: 0, px: Vec::new(), ativos: Vec::new() }
+        Sprite { w: 0, h: 0, ox: 0, oy: 0, px: Vec::new(), ativos: Vec::new(), vidro: Vec::new(), centro: V2::default() }
     }
 
     pub fn renderizar(&mut self, camadas: &[Camada], tema: &Tema, sombra: f32, tempo: f32) {
@@ -486,6 +648,10 @@ impl Sprite {
         self.oy = -y0;
         self.px.clear();
         self.px.resize(self.w * self.h, [0.0; 4]);
+        self.vidro.clear();
+        if tema.vetor.forma.vidro() {
+            self.vidro.resize(self.w * self.h, [0.0; 2]);
+        }
         for cam in camadas {
             if cam.alfa <= 0.001 {
                 continue;
@@ -497,7 +663,7 @@ impl Sprite {
             for j in 0..self.h {
                 for i in 0..self.w {
                     let ptela = v2(i as f32 + 0.5 - self.ox as f32, j as f32 + 0.5 - self.oy as f32);
-                    let c = match imagem {
+                    let (c, vd) = match imagem {
                         Some(b) => {
                             // a imagem já costuma trazer sombra própria: a nossa entra mais fraca
                             let mut c = b.amostrar(ptela / s, s);
@@ -505,10 +671,15 @@ impl Sprite {
                                 let a = b.alfa_borrado((ptela - sb.desloc) / s, sb.raio / s) * sb.opacidade * 0.6;
                                 c = sobre(c, [0.0, 0.0, 0.0, a]);
                             }
-                            c
+                            (c, [0.0; 2])
                         }
                         None => pixel(&partes, ptela / s, (ptela - sb.desloc) / s, s, &sb),
                     };
+                    if vd[0] > 0.0 && !self.vidro.is_empty() {
+                        let v = &mut self.vidro[j * self.w + i];
+                        v[0] += vd[0] * cam.alfa;
+                        v[1] = v[1].max(vd[1]);
+                    }
                     if c[3] > 0.0 {
                         let d = &mut self.px[j * self.w + i];
                         for k in 0..4 {
@@ -517,6 +688,48 @@ impl Sprite {
                     }
                 }
             }
+        }
+        self.fechar();
+    }
+
+    /// Pílula de vidro de `w` x `h` pixels (o ponteiro grudado num botão), com o canto
+    /// superior esquerdo no ponto (ox, oy) do sprite.
+    pub fn renderizar_pilula(&mut self, w: f32, h: f32, s: f32, tema: &Tema, sombra: f32) {
+        let m = (6.0 * s).ceil() as i32 + 2;
+        self.ox = m;
+        self.oy = m;
+        self.w = w.ceil() as usize + 2 * m as usize;
+        self.h = h.ceil() as usize + 2 * m as usize + (1.3 * s).ceil() as usize;
+        self.px.clear();
+        self.px.resize(self.w * self.h, [0.0; 4]);
+        self.vidro.clear();
+        self.vidro.resize(self.w * self.h, [0.0; 2]);
+        let (mw, mh) = (w / s / 2.0, h / s / 2.0);
+        let r = mh.min(14.0);
+        let partes = vidro_partes(Rc::new(move |p| sd_caixa(p, v2(mw, mh), v2(mw, mh), r)), &tema.vetor.pal, tema.vetor.forma == Forma::Lente);
+        let sb = Sombra { opacidade: sombra / 100.0, desloc: v2(0.0, 1.3 * s), raio: 2.2 * s };
+        for j in 0..self.h {
+            for i in 0..self.w {
+                let ptela = v2(i as f32 + 0.5 - self.ox as f32, j as f32 + 0.5 - self.oy as f32);
+                let (c, vd) = pixel(&partes, ptela / s, (ptela - sb.desloc) / s, s, &sb);
+                self.px[j * self.w + i] = c;
+                self.vidro[j * self.w + i] = vd;
+            }
+        }
+        self.fechar();
+    }
+
+    /// Lista dos pixels visíveis e o centro do vidro.
+    fn fechar(&mut self) {
+        if !self.vidro.is_empty() {
+            let (mut soma, mut peso) = (V2::default(), 0.0);
+            for (i, v) in self.vidro.iter().enumerate() {
+                if v[0] > 0.0 {
+                    soma += v2((i % self.w) as f32 + 0.5, (i / self.w) as f32 + 0.5) * v[0];
+                    peso += v[0];
+                }
+            }
+            self.centro = if peso > 0.0 { soma / peso } else { V2::default() };
         }
         self.ativos.clear();
         for (i, c) in self.px.iter().enumerate() {
@@ -561,7 +774,7 @@ pub fn icone_app(lado: usize) -> Vec<u8> {
                 c = premul(cor, cob);
             }
             let ps = p - desloc;
-            c = sobre(pixel(&partes, ps / esc, (ps - sb.desloc) / esc, esc, &sb), c);
+            c = sobre(pixel(&partes, ps / esc, (ps - sb.desloc) / esc, esc, &sb).0, c);
             let a = c[3].clamp(0.0, 1.0);
             let k = (j * lado + i) * 4;
             if a > 0.0 {
@@ -586,7 +799,7 @@ pub fn icone(lado: usize) -> Vec<u32> {
     for j in 0..lado {
         for i in 0..lado {
             let ptela = v2(i as f32 + 0.5, j as f32 + 0.5) - desloc;
-            let c = pixel(&partes, ptela / s, ptela / s, s, &sb);
+            let c = pixel(&partes, ptela / s, ptela / s, s, &sb).0;
             let a = c[3].clamp(0.0, 1.0);
             if a <= 0.0 {
                 continue;

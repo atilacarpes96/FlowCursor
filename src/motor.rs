@@ -51,6 +51,7 @@ struct ChaveSprite {
     tema: u64,
     sombra: u16,
     fase: u32,
+    ima: u16,
 }
 
 pub struct Quadro<'a> {
@@ -82,6 +83,14 @@ pub struct Motor {
     chave_sprite: Option<ChaveSprite>,
     versao_sprite: u64,
     tema: Option<Arc<Tema>>,
+    /// Último fundo usado no vidro (para redesenhar quando a tela atrás muda).
+    fundo_ant: usize,
+    /// Ímã: 0 = ponteiro normal, 1 = virou a pílula grudada no botão.
+    ima: f32,
+    /// Pílula (x, y, largura, altura) na tela; anda com mola até o botão e de volta.
+    caixa: [f32; 4],
+    pilula: Sprite,
+    chave_pilula: (i32, i32, u64, u16),
     ultimo: Option<(i64, i64, u64)>,
     forcar: bool,
     camada: Vec<Cor>,
@@ -110,6 +119,11 @@ impl Motor {
             chave_sprite: None,
             versao_sprite: 0,
             tema: None,
+            fundo_ant: 0,
+            ima: 0.0,
+            caixa: [0.0; 4],
+            pilula: Sprite::novo(),
+            chave_pilula: (0, 0, 0, 0),
             ultimo: None,
             forcar: true,
             camada: Vec::new(),
@@ -223,7 +237,38 @@ impl Motor {
 
         // Sprites: só redesenha quando forma, escala, tema ou animação mudam.
         let tema = temas::obter(cfg);
-        let escala_total = escala_base * self.escala.x;
+
+        // Ímã: sobre um botão, o ponteiro de vidro se desfaz numa pílula do tamanho dele,
+        // que acompanha um pouco o mouse; fora, a pílula volta a ser o ponteiro.
+        let botao = if tema.usa_fundo() && cfg.grudar_botoes { crate::alvo::sob(alvo.x as i32, alvo.y as i32) } else { None };
+        let s = escala_base;
+        let alvo_caixa = match botao {
+            Some(r) => {
+                let (cx, cy) = ((r.left + r.right) as f32 / 2.0, (r.top + r.bottom) as f32 / 2.0);
+                [r.left as f32 - 4.0 * s + (alvo.x - cx) * 0.06, r.top as f32 - 4.0 * s + (alvo.y - cy) * 0.1, (r.right - r.left) as f32 + 8.0 * s, (r.bottom - r.top) as f32 + 8.0 * s]
+            }
+            None => [self.pos.x - 2.0 * s, self.pos.y - 2.0 * s, 16.0 * s, 22.0 * s],
+        };
+        let alvo_ima = if botao.is_some() { 1.0 } else { 0.0 };
+        let ima_ant = self.ima;
+        let caixa_ant = self.caixa;
+        if self.ima < 0.01 && botao.is_none() {
+            self.caixa = alvo_caixa;
+        } else if dt > 0.0 {
+            let f = (dt * 14.0).min(1.0);
+            for k in 0..4 {
+                self.caixa[k] += (alvo_caixa[k] - self.caixa[k]) * f;
+            }
+        }
+        if dt > 0.0 {
+            self.ima += (alvo_ima - self.ima) * (dt * 12.0).min(1.0);
+            if (self.ima - alvo_ima).abs() < 0.003 {
+                self.ima = alvo_ima;
+            }
+        }
+        let mexeu_ima = self.ima != ima_ant || (self.ima > 0.0 && caixa_ant.iter().zip(&self.caixa).any(|(a, b)| (a - b).abs() > 0.05));
+
+        let escala_total = escala_base * self.escala.x * (1.0 - 0.6 * self.ima);
         let tempo = (t % 1000.0) as f32;
         let fase = tema.fase(self.tipo, tempo) ^ self.tipo_ant.map_or(0, |a| tema.fase(a, tempo) << 16);
         let chave = ChaveSprite {
@@ -234,20 +279,29 @@ impl Motor {
             tema: tema.serie,
             sombra: cfg.sombra as u16,
             fase,
+            ima: (self.ima * 1000.0) as u16,
         };
         if self.chave_sprite.as_ref() != Some(&chave) {
             let mut camadas = Vec::with_capacity(2);
+            let visivel = 1.0 - self.ima;
             if let Some(ant) = self.tipo_ant {
                 let e = smoothstep(0.0, 1.0, self.transicao);
-                camadas.push(Camada { tipo: ant, alfa: 1.0 - e, escala: escala_total });
-                camadas.push(Camada { tipo: self.tipo, alfa: e, escala: escala_total });
+                camadas.push(Camada { tipo: ant, alfa: (1.0 - e) * visivel, escala: escala_total });
+                camadas.push(Camada { tipo: self.tipo, alfa: e * visivel, escala: escala_total });
             } else {
-                camadas.push(Camada { tipo: self.tipo, alfa: 1.0, escala: escala_total });
+                camadas.push(Camada { tipo: self.tipo, alfa: visivel, escala: escala_total });
             }
             self.sprite.renderizar(&camadas, &tema, cfg.sombra, tempo);
             self.sprite_rastro.renderizar(&camadas, &tema, 0.0, tempo);
             self.chave_sprite = Some(chave);
             self.versao_sprite += 1;
+        }
+        if self.ima > 0.01 {
+            let chave = (self.caixa[2].round() as i32, self.caixa[3].round() as i32, tema.serie, cfg.sombra as u16);
+            if chave != self.chave_pilula {
+                self.pilula.renderizar_pilula(chave.0 as f32, chave.1 as f32, s, &tema, cfg.sombra);
+                self.chave_pilula = chave;
+            }
         }
         self.tema = Some(tema);
 
@@ -259,7 +313,13 @@ impl Motor {
             || (pos_ant - self.pos).len() > 0.001
             || rastro_visivel
             || !self.ondas.is_empty()
-            || !self.escala.parada(alvo_escala);
+            || !self.escala.parada(alvo_escala)
+            || mexeu_ima;
+        // com vidro, a tela atrás pode mudar com o ponteiro parado
+        let fundo = if self.sprite.vidro.is_empty() { None } else { crate::captura::atual() };
+        let id_fundo = fundo.as_ref().map_or(0, |f| Arc::as_ptr(f) as usize);
+        let animando = animando || id_fundo != self.fundo_ant;
+        self.fundo_ant = id_fundo;
         let assinatura = ((self.pos.x * 64.0) as i64, (self.pos.y * 64.0) as i64, self.versao_sprite);
         if !animando && !self.forcar && self.ultimo == Some(assinatura) {
             return None;
@@ -267,10 +327,11 @@ impl Motor {
         self.ultimo = Some(assinatura);
         self.forcar = false;
 
-        Some(self.compor(t, pos_ant, escala_base, rastro_visivel, cfg))
+        Some(self.compor(t, pos_ant, escala_base, rastro_visivel, cfg, fundo.as_deref()))
     }
 
-    fn compor(&mut self, t: f64, pos_ant: V2, escala_base: f32, rastro_visivel: bool, cfg: &Config) -> Quadro<'_> {
+    #[allow(clippy::too_many_arguments)]
+    fn compor(&mut self, t: f64, pos_ant: V2, escala_base: f32, rastro_visivel: bool, cfg: &Config, fundo: Option<&crate::captura::Fundo>) -> Quadro<'_> {
         // Trajeto do borrão: a fração do último quadro em que o "obturador" fica aberto.
         let desloc = (self.pos - pos_ant) * (cfg.borrao / 100.0);
         let comp_total = desloc.len();
@@ -284,6 +345,11 @@ impl Motor {
         let (dir_x, baixo) = (sp.w as f32 - sp.ox as f32 + 2.0, sp.h as f32 - sp.oy as f32 + 2.0);
         let mut min = v2(self.pos.x.min(cauda.x) + esq, self.pos.y.min(cauda.y) + topo);
         let mut max = v2(self.pos.x.max(cauda.x) + dir_x, self.pos.y.max(cauda.y) + baixo);
+        if self.ima > 0.01 {
+            let (p, c) = (&self.pilula, self.caixa);
+            min = v2(min.x.min(c[0] - p.ox as f32 - 1.0), min.y.min(c[1] - p.oy as f32 - 1.0));
+            max = v2(max.x.max(c[0] - p.ox as f32 + p.w as f32 + 1.0), max.y.max(c[1] - p.oy as f32 + p.h as f32 + 1.0));
+        }
         if rastro_visivel {
             for pr in self.rastro.iter().filter(|pr| (pr.p - self.pos).len() <= ALCANCE_RASTRO) {
                 min = v2(min.x.min(pr.p.x + esq), min.y.min(pr.p.y + topo));
@@ -330,6 +396,39 @@ impl Motor {
             let s = if n == 1 { 0.0 } else { k as f32 / (n - 1) as f32 };
             let q = self.pos - dir * (comp * s) - origem;
             espalhar(&self.sprite, q, peso / soma, &mut self.acum, w, h);
+        }
+
+        // Vidro: a tela atrás por baixo da forma da frente (Cristal: meio desfocada, mais na
+        // borda; Lente: nítida e ampliada a partir do centro).
+        let lente = self.tema.as_ref().is_some_and(|t| t.vetor.forma == crate::formas::Forma::Lente);
+        if let Some(f) = fundo {
+            let q = self.pos - origem;
+            let (ix, iy) = ((q.x - self.sprite.ox as f32).round() as i32, (q.y - self.sprite.oy as f32).round() as i32);
+            vidro_por_baixo(&self.sprite, ix, iy, (ox, oy, w, h), f, lente, 1.4, &mut self.acum);
+        }
+
+        // Pílula do ímã, por baixo do ponteiro (que some enquanto ela aparece).
+        if self.ima > 0.01 {
+            let p = &self.pilula;
+            let (ix, iy) = ((self.caixa[0] - origem.x).round() as i32 - p.ox, (self.caixa[1] - origem.y).round() as i32 - p.oy);
+            let mut camada_pilula = vec![[0.0f32; 4]; p.w * p.h];
+            for (i, c) in camada_pilula.iter_mut().enumerate() {
+                *c = p.px[i];
+            }
+            if let Some(f) = fundo {
+                vidro_por_baixo(p, 0, 0, (ox + ix, oy + iy, p.w, p.h), f, lente, 1.07, &mut camada_pilula);
+            }
+            for j in 0..p.h {
+                for i in 0..p.w {
+                    let (x, y) = (ix + i as i32, iy + j as i32);
+                    if x < 0 || y < 0 || x >= w as i32 || y >= h as i32 {
+                        continue;
+                    }
+                    let c = camada_pilula[j * p.w + i].map(|v| v * self.ima);
+                    let d = &mut self.camada[y as usize * w + x as usize];
+                    *d = sobre(c, *d);
+                }
+            }
         }
 
         if self.saida.len() < n_px {
@@ -445,6 +544,37 @@ impl Motor {
                     self.camada[i] = sobre(cor, self.camada[i]);
                 }
             }
+        }
+    }
+}
+
+/// Põe a tela de trás por baixo do vidro do sprite, que está em (ix, iy) no destino.
+/// `area` é (x, y, largura, altura) do destino na tela.
+#[allow(clippy::too_many_arguments)]
+fn vidro_por_baixo(sp: &Sprite, ix: i32, iy: i32, area: (i32, i32, usize, usize), f: &crate::captura::Fundo, lente: bool, zoom: f32, dest: &mut [Cor]) {
+    let (ox, oy, w, h) = area;
+    let centro = v2(ox as f32 + ix as f32 + sp.centro.x, oy as f32 + iy as f32 + sp.centro.y);
+    for j in 0..sp.h {
+        for i in 0..sp.w {
+            let [cob, borda] = sp.vidro[j * sp.w + i];
+            let (x, y) = (ix + i as i32, iy + j as i32);
+            if cob <= 0.0 || x < 0 || y < 0 || x >= w as i32 || y >= h as i32 {
+                continue;
+            }
+            let c = if lente {
+                // a lente amplia mais perto da borda, como vidro grosso
+                let p = v2((ox + x) as f32 + 0.5, (oy + y) as f32 + 0.5);
+                let z = zoom * (1.0 + 0.12 * borda);
+                let o = centro + (p - centro) / z;
+                let Some((n, _)) = f.em(o.x.floor() as i32, o.y.floor() as i32) else { continue };
+                n
+            } else {
+                let Some((n, b)) = f.em(ox + x, oy + y) else { continue };
+                let k = (0.55 + 0.45 * borda).min(1.0);
+                [n[0] + (b[0] - n[0]) * k, n[1] + (b[1] - n[1]) * k, n[2] + (b[2] - n[2]) * k]
+            };
+            let d = &mut dest[y as usize * w + x as usize];
+            *d = sobre(*d, [c[0] * cob, c[1] * cob, c[2] * cob, cob.min(1.0)]);
         }
     }
 }
