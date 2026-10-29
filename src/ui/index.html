@@ -8,135 +8,216 @@
 <link rel="icon" href="/icone.svg" type="image/svg+xml">
 <style>
 :root {
-  --fundo: #f2f2f7;
-  --cartao: rgba(255, 255, 255, 0.72);
-  --borda-cartao: rgba(255, 255, 255, 0.9);
-  --separador: rgba(60, 60, 67, 0.14);
-  --texto: #000;
-  --texto-2: rgba(60, 60, 67, 0.62);
+  --papel: #ebe9f5;
+  --mancha-1: #a99cff;
+  --mancha-2: #ffb393;
+  --mancha-3: #8fd3ff;
+  --material: rgba(250, 250, 252, 0.8);
+  --borda-janela: rgba(255, 255, 255, 0.7);
+  --lateral: linear-gradient(160deg, rgba(185, 173, 255, 0.6) 0%, rgba(166, 214, 255, 0.6) 55%, rgba(255, 208, 184, 0.6) 100%);
+  --vidro: rgba(255, 255, 255, 0.36);
+  --vidro-borda: rgba(255, 255, 255, 0.6);
+  --vidro-brilho: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+  --vidro-sombra: 0 10px 34px rgba(30, 20, 80, 0.16);
+  --grupo: rgba(255, 255, 255, 0.78);
+  --selecao: rgba(255, 255, 255, 0.72);
+  --realce: rgba(0, 0, 0, 0.06);
+  --separador: rgba(0, 0, 0, 0.1);
+  --texto: #1d1d1f;
+  /* 4,7:1 sobre os grupos; o cinza de antes (60,60,67 a 62%) dava 3,5:1 */
+  --texto-2: #5e5e63;
   --texto-3: rgba(60, 60, 67, 0.32);
   --destaque: #007aff;
+  /* azul para texto: 5,6:1 no branco (o #007aff dá 4:1) */
+  --link: #0066cc;
   --verde: #34c759;
-  --vermelho: #ff3b30;
-  --trilha: rgba(120, 120, 128, 0.2);
-  --chave-off: rgba(120, 120, 128, 0.16);
+  --vermelho: #d70015;
+  --trilha: rgba(120, 120, 128, 0.22);
+  --chave-off: rgba(120, 120, 128, 0.2);
   --seg-fundo: rgba(118, 118, 128, 0.12);
   --seg-pilula: #fff;
-  --sombra-cartao: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(30, 40, 90, 0.07);
-  --bolha-1: #8fd3ff;
-  --bolha-2: #b9b2ff;
-  --bolha-3: #ffc2e0;
-  --topo: rgba(242, 242, 247, 0.62);
   --marca: rgba(60, 60, 67, 0.55);
+  --vitrine: linear-gradient(135deg, #9db7ff, #ffb6a0);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fundo: #000;
-    --cartao: rgba(28, 28, 30, 0.66);
-    --borda-cartao: rgba(255, 255, 255, 0.07);
-    --separador: rgba(84, 84, 88, 0.42);
-    --texto: #fff;
-    --texto-2: rgba(235, 235, 245, 0.6);
+    --papel: #110f1c;
+    --mancha-1: #4a3f99;
+    --mancha-2: #8a4a36;
+    --mancha-3: #24427a;
+    --material: rgba(28, 28, 32, 0.82);
+    --borda-janela: rgba(255, 255, 255, 0.12);
+    --lateral: linear-gradient(160deg, rgba(74, 63, 153, 0.5), rgba(36, 66, 122, 0.5) 55%, rgba(122, 66, 50, 0.5));
+    --vidro: rgba(40, 40, 46, 0.42);
+    --vidro-borda: rgba(255, 255, 255, 0.14);
+    --vidro-brilho: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    --vidro-sombra: 0 10px 34px rgba(0, 0, 0, 0.45);
+    --grupo: rgba(255, 255, 255, 0.06);
+    --selecao: rgba(255, 255, 255, 0.16);
+    --realce: rgba(255, 255, 255, 0.1);
+    --separador: rgba(255, 255, 255, 0.12);
+    --texto: #f5f5f7;
+    --texto-2: #a1a1a6;
     --texto-3: rgba(235, 235, 245, 0.3);
     --destaque: #0a84ff;
+    --link: #4da3ff;
     --verde: #30d158;
     --vermelho: #ff453a;
-    --trilha: rgba(120, 120, 128, 0.32);
-    --chave-off: rgba(120, 120, 128, 0.32);
+    --trilha: rgba(255, 255, 255, 0.18);
+    --chave-off: rgba(120, 120, 128, 0.36);
     --seg-fundo: rgba(118, 118, 128, 0.24);
     --seg-pilula: #636366;
-    --sombra-cartao: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 34px rgba(0, 0, 0, 0.45);
-    --bolha-1: #0b5394;
-    --bolha-2: #3b2a8f;
-    --bolha-3: #7a1f5c;
-    --topo: rgba(0, 0, 0, 0.55);
     --marca: rgba(235, 235, 245, 0.6);
+    --vitrine: linear-gradient(135deg, #3c4f8f, #8a5a4a);
   }
 }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
-  margin: 0;
-  background: var(--fundo);
-  color: var(--texto);
-  font: 15px/1.35 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  user-select: none;
-  min-height: 100vh;
+  margin: 0; height: 100vh; overflow: hidden;
+  background: var(--papel); color: var(--texto);
+  font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; user-select: none;
 }
+button { font: inherit; color: inherit; }
 
-/* Barra de rolagem fina, por cima do conteúdo */
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--texto-3); border-radius: 5px; border: 3px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--texto-2); background-clip: padding-box; }
 
-/* Manchas de cor atrás do vidro: sem elas o desfoque não aparece. */
-.fundo { position: fixed; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
-.fundo i {
-  position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%;
-  filter: blur(70px); opacity: 0.55; animation: flutuar 26s ease-in-out infinite alternate;
-}
-.fundo i:nth-child(1) { background: var(--bolha-1); left: -24vmax; top: -18vmax; }
-.fundo i:nth-child(2) { background: var(--bolha-2); right: -28vmax; top: 22vh; animation-duration: 32s; }
-.fundo i:nth-child(3) { background: var(--bolha-3); left: -10vmax; bottom: -34vmax; animation-duration: 38s; }
-@keyframes flutuar { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
-@media (prefers-reduced-motion: reduce) { .fundo i { animation: none; } }
+/* Manchas de cor paradas atrás do vidro: sem elas o vidro não tem o que mostrar.
+   Ficam paradas de propósito, para a janela não gastar placa de vídeo. */
+.fundo { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.fundo i { position: absolute; border-radius: 50%; filter: blur(90px); }
+.fundo i:nth-child(1) { width: 60vmax; height: 60vmax; left: -14vmax; top: -18vmax; background: var(--mancha-1); opacity: 0.6; }
+.fundo i:nth-child(2) { width: 56vmax; height: 56vmax; right: -16vmax; top: 10vh; background: var(--mancha-2); opacity: 0.5; }
+.fundo i:nth-child(3) { width: 64vmax; height: 50vmax; left: 20vw; bottom: -30vmax; background: var(--mancha-3); opacity: 0.45; }
 
+/* Vidro (Liquid Glass) só na camada de controles: barra lateral, cápsulas do topo, menu */
+.vidro {
+  background: var(--vidro);
+  backdrop-filter: blur(26px) saturate(190%);
+  border: 1px solid var(--vidro-borda);
+  box-shadow: var(--vidro-brilho), var(--vidro-sombra);
+}
+
+.janela {
+  position: relative; height: 100vh; display: flex;
+  background: var(--material); backdrop-filter: blur(40px) saturate(160%);
+}
+.janela::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 236px; background: var(--lateral); pointer-events: none; }
+
+nav {
+  position: relative; flex: none; width: 216px; margin: 10px; padding: 16px 8px 12px;
+  border-radius: 20px; display: flex; flex-direction: column; gap: 2px;
+}
+.marca { display: flex; align-items: center; gap: 10px; padding: 0 8px 14px; }
+.app-icone { width: 38px; height: 38px; border-radius: 10px; box-shadow: 0 4px 12px rgba(94, 92, 230, 0.4); }
+.marca b { display: block; font-size: 15px; font-weight: 600; }
+.marca small { display: block; font-size: 12px; color: var(--texto-2); }
+.item-nav {
+  display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 10px;
+  border: 0; border-radius: 10px; background: transparent; text-align: left; font-size: 14px; cursor: pointer;
+}
+.item-nav:hover { background: var(--realce); }
+.item-nav.atual { background: var(--selecao); font-weight: 600; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.08); }
+.item-nav:focus-visible, .menu button:focus-visible, .capsula:focus-visible { outline: 2px solid var(--destaque); outline-offset: 1px; }
+.item-nav i {
+  width: 24px; height: 24px; flex: none; border-radius: 7px; display: grid; place-items: center;
+  color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.item-nav svg { width: 14px; height: 14px; }
+.espaco { flex: 1; }
+#resumo { margin: 0 8px 8px; font-size: 12px; color: var(--texto-2); }
+.atalhos { margin: 0 4px; padding: 10px 12px; border-radius: 12px; background: var(--realce); font-size: 12px; color: var(--texto-2); line-height: 1.5; }
+kbd { font: inherit; font-size: 11.5px; font-weight: 600; color: var(--texto); }
+
+.conteudo { position: relative; flex: 1; min-width: 0; overflow-y: auto; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { .conteudo { scroll-behavior: auto; } }
 header {
-  position: sticky; top: 0; z-index: 5;
-  padding: 18px 20px 14px;
-  background: var(--topo);
-  backdrop-filter: blur(24px) saturate(180%);
-  border-bottom: 1px solid transparent;
-  transition: border-color .2s;
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px;
+  padding: 16px 22px 12px;
 }
-header.rolado { border-bottom-color: var(--separador); }
-.topo-linha { display: flex; align-items: center; gap: 14px; max-width: 1060px; margin: 0 auto; }
-.app-icone { width: 52px; height: 52px; border-radius: 13px; box-shadow: 0 6px 18px rgba(94, 92, 230, 0.35); }
+header { transition: background .2s, box-shadow .2s; }
+header.rolado { background: var(--material); backdrop-filter: blur(30px) saturate(170%); box-shadow: 0 1px 0 var(--separador); }
 .titulos { flex: 1; min-width: 0; }
-h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-#status { margin: 2px 0 0; color: var(--texto-2); font-size: 13px; }
-#status b { font-weight: 600; color: var(--verde); }
-#status b.pausado { color: var(--texto-2); }
-
-main { position: relative; z-index: 1; max-width: 1060px; margin: 0 auto; padding: 4px 16px 36px; }
-/* duas colunas: o ponteiro à esquerda, o Alt+Tab à direita; estreita, vira uma só */
-.colunas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 28px; align-items: start; }
-.coluna { min-width: 0; }
-@media (max-width: 860px) { .colunas { grid-template-columns: minmax(0, 1fr); } }
-section { animation: surgir .45s cubic-bezier(.2, .8, .2, 1) both; }
-section:nth-of-type(2) { animation-delay: .04s; }
-section:nth-of-type(3) { animation-delay: .08s; }
-section:nth-of-type(4) { animation-delay: .12s; }
-section:nth-of-type(5) { animation-delay: .16s; }
-@keyframes surgir { from { opacity: 0; transform: translateY(10px); } }
-h2 {
-  margin: 24px 16px 7px; font-size: 13px; font-weight: 400;
-  color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.02em;
+h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+#status { margin: 1px 0 0; font-size: 12.5px; color: var(--texto-2); }
+.capsula {
+  display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 14px;
+  border-radius: 20px; flex: none;
 }
-.rodape { margin: 7px 16px 0; font-size: 13px; color: var(--texto-2); }
+.ponto { width: 8px; height: 8px; border-radius: 4px; background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+.capsula.pausado .ponto { background: var(--texto-3); box-shadow: none; }
+.capsula b { font-size: 13px; font-weight: 600; }
+.redondo { width: 40px; height: 40px; padding: 0; border-radius: 20px; display: grid; place-items: center; cursor: pointer; position: relative; }
+.redondo svg { width: 18px; height: 18px; }
+.redondo .aviso-ponto { position: absolute; right: 7px; top: 7px; width: 8px; height: 8px; border-radius: 4px; background: var(--vermelho); display: none; }
+.redondo.com-aviso .aviso-ponto { display: block; }
+#btnNovaVersao { height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: var(--destaque); color: #fff; font-weight: 600; cursor: pointer; }
+#btnNovaVersao[hidden] { display: none; }
 
-.cartao {
-  background: var(--cartao);
-  backdrop-filter: blur(28px) saturate(170%);
-  border: 1px solid var(--borda-cartao);
-  border-radius: 14px;
-  box-shadow: var(--sombra-cartao);
-  overflow: hidden;
+.menu {
+  position: absolute; right: 22px; top: 62px; z-index: 10; width: 260px; padding: 6px; border-radius: 16px;
+  display: flex; flex-direction: column;
 }
+.menu[hidden] { display: none; }
+.menu button {
+  height: 34px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
+  text-align: left; font-size: 14px; cursor: pointer;
+}
+.menu button:hover { background: var(--realce); }
+.menu button:disabled { opacity: 0.45; cursor: default; }
+.menu hr { width: calc(100% - 20px); height: 1px; margin: 4px 10px; border: 0; background: var(--separador); }
+.menu .perigo { color: var(--vermelho); }
+.menu .confirmar { background: var(--vermelho); color: #fff; }
+.menu .confirmar:hover { background: var(--vermelho); }
+
+main { max-width: 760px; padding: 4px 22px 32px; }
+section { margin-bottom: 22px; scroll-margin-top: 76px; animation: surgir .4s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes surgir { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { section { animation: none; } }
+h2 { margin: 0 6px 8px; font-size: 13px; font-weight: 600; color: var(--texto-2); }
+.rodape { margin: 7px 6px 0; font-size: 12.5px; color: var(--texto-2); }
+
+.cartao { background: var(--grupo); border-radius: 16px; overflow: hidden; }
 .linha { position: relative; padding: 12px 16px; }
-.linha + .linha::before {
-  content: ""; position: absolute; top: 0; left: 16px; right: 0;
-  height: 1px; background: var(--separador);
-}
+.linha + .linha::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--separador); }
 .cabeca { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; }
-.nome { font-size: 16px; }
-.valor { color: var(--texto-2); font-variant-numeric: tabular-nums; font-size: 15px; white-space: nowrap; }
-.legenda { margin-top: 1px; color: var(--texto-2); font-size: 13px; }
+.nome { font-size: 14px; }
+.valor { color: var(--texto-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.legenda { margin-top: 1px; color: var(--texto-2); font-size: 12.5px; }
+.direita { display: flex; align-items: center; gap: 8px; }
 
-/* Controle deslizante no estilo iOS */
+/* Área de teste no topo: é a parte que só o FlowCursor tem */
+.vitrine-teste { position: relative; border-radius: 18px; overflow: hidden; }
+.pista {
+  position: relative; height: 210px; display: grid; place-items: center;
+  background:
+    linear-gradient(90deg, #f5f5f7 0 33.3%, transparent 33.3%),
+    linear-gradient(120deg, #1e1a38 0%, #4b3fa8 45%, #f0957a 100%);
+}
+.pista span {
+  position: absolute; right: 16px; top: 12px; font-size: 12px; font-weight: 600; color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); pointer-events: none;
+}
+.pista .capsula { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 4px; gap: 4px; }
+.pista .capsula button {
+  height: 34px; padding: 0 16px; border: 0; border-radius: 17px; background: transparent; color: var(--texto); font-size: 13px; cursor: pointer;
+}
+.pista .capsula button.ativo { background: rgba(255, 255, 255, 0.85); color: #1d1d1f; font-weight: 600; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
+.grade { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--separador); }
+.grade[hidden] { display: none; }
+.ladrilho {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  height: 62px; background: var(--grupo); font-size: 12px; color: var(--texto-2); text-align: center;
+}
+.ladrilho:hover { color: var(--texto); }
+.ladrilho b { font-size: 18px; font-weight: 400; color: var(--texto); line-height: 1; font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-variant-emoji: text; }
+
+/* Controle deslizante: o botão vira uma pílula de vidro enquanto é arrastado */
 input[type=range] {
   -webkit-appearance: none; appearance: none;
   width: 100%; height: 30px; margin: 4px 0 -4px; background: transparent; cursor: pointer;
@@ -154,214 +235,159 @@ input[type=range]::-webkit-slider-runnable-track {
     linear-gradient(to right, var(--destaque) var(--p), var(--trilha) var(--p));
 }
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 27px; height: 27px; margin-top: -11.5px; border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0.5px 4px rgba(0, 0, 0, 0.12), 0 6px 13px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
-  transition: transform .18s cubic-bezier(.3, 1.6, .5, 1);
+  -webkit-appearance: none; width: 24px; height: 24px; margin-top: -10px; border-radius: 12px;
+  background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: width .18s cubic-bezier(.3, 1.4, .5, 1), background .18s, box-shadow .18s;
 }
-input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
+input[type=range]:active::-webkit-slider-thumb {
+  width: 40px; background: rgba(255, 255, 255, 0.45); backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.6), 0 6px 16px rgba(0, 0, 0, 0.2);
+}
 input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--destaque) 35%, transparent); }
 
-/* Restaurar padrões */
-.topo-acoes { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 4px 0; }
-#resumo { font-size: 13px; color: var(--texto-2); }
-.pilula-botao {
-  display: inline-flex; align-items: center; gap: 6px; flex: none;
-  height: 34px; padding: 0 14px; border-radius: 17px;
-  border: 1px solid var(--borda-cartao); background: var(--cartao);
-  backdrop-filter: blur(28px) saturate(170%); box-shadow: var(--sombra-cartao);
-  color: var(--destaque); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
-  transition: transform .15s, background .2s, color .2s;
-}
-.pilula-botao:active { transform: scale(0.96); }
-.pilula-botao.confirmar { background: var(--vermelho); color: #fff; border-color: transparent; }
-.pilula-botao:disabled { opacity: 0.45; cursor: default; }
-.direita { display: flex; align-items: center; gap: 8px; }
 .volta {
   display: none; align-items: center; height: 22px; padding: 0 8px; border: 0; border-radius: 11px;
-  background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--destaque);
-  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--link);
+  font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .volta.visivel { display: inline-flex; }
 
-.modal-fundo { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.5); padding: 16px; }
-.modal-fundo[hidden] { display: none; }
-.modal-fundo .caixa { width: min(520px, 100%); background: var(--cartao); backdrop-filter: blur(28px) saturate(170%); border: 1px solid var(--borda-cartao); border-radius: 14px; box-shadow: var(--sombra-cartao); padding: 14px 16px; }
-
-/* Reiniciar, ao lado da chave */
-.reiniciar {
-  flex: none; width: 31px; height: 31px; border-radius: 50%; border: 0; padding: 0;
-  background: var(--seg-fundo); color: var(--texto-2); font: inherit; font-size: 17px; line-height: 1; cursor: pointer;
-  transition: color .2s, background .2s, transform .5s cubic-bezier(.3, 1.3, .5, 1);
-}
-.reiniciar:hover { color: var(--destaque); background: color-mix(in srgb, var(--destaque) 14%, transparent); }
-.reiniciar.girando { transform: rotate(360deg); color: var(--destaque); pointer-events: none; }
-
 /* Chave liga/desliga */
-.chave { position: relative; width: 51px; height: 31px; flex: none; }
+.chave { position: relative; width: 46px; height: 28px; flex: none; }
 .chave input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
-.chave span { position: absolute; inset: 0; border-radius: 16px; background: var(--chave-off); transition: background .25s; }
+.chave span { position: absolute; inset: 0; border-radius: 14px; background: var(--chave-off); transition: background .25s; }
 .chave span::after {
-  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%;
-  background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
-  transition: transform .3s cubic-bezier(.3, 1.4, .5, 1);
+  content: ""; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; border-radius: 50%;
+  background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: transform .3s cubic-bezier(.3, 1.4, .5, 1), width .2s;
 }
+.chave input:active + span::after { width: 30px; }
 .chave input:checked + span { background: var(--verde); }
-.chave input:checked + span::after { transform: translateX(20px); }
+.chave input:checked + span::after { transform: translateX(18px); }
+.chave input:checked:active + span::after { transform: translateX(12px); }
 .chave input:focus-visible + span { box-shadow: 0 0 0 3px color-mix(in srgb, var(--destaque) 40%, transparent); }
 
-/* Controle segmentado */
+/* Controle segmentado (relato) */
 .segmentado {
   position: relative; display: grid; grid-template-columns: 1fr 1fr;
   margin-top: 10px; padding: 2px; border-radius: 10px; background: var(--seg-fundo);
 }
 .segmentado .pilula {
   position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 8px;
-  background: var(--seg-pilula);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+  background: var(--seg-pilula); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
   transition: transform .32s cubic-bezier(.3, 1.3, .5, 1);
 }
-.segmentado[data-v=claro] .pilula { transform: translateX(100%); }
-.segmentado button {
-  position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
-  height: 40px; border: 0; background: none; color: var(--texto); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
-}
-.segmentado svg { width: 15px; height: 22px; overflow: visible; }
+.segmentado button { position: relative; height: 34px; border: 0; background: none; font-size: 14px; font-weight: 500; cursor: pointer; }
 
 /* Temas do ponteiro */
-.grupo-tema { margin: 12px 0 6px; font-size: 12px; font-weight: 600; color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.03em; }
-.grade-temas { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.grupo-tema { margin: 12px 0 6px; font-size: 12px; font-weight: 600; color: var(--texto-2); }
+.grade-temas { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
 .tema-cartao {
-  display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden;
-  border-radius: 12px; border: 1px solid var(--borda-cartao); background: var(--seg-fundo);
-  color: var(--texto); font: inherit; text-align: left; cursor: pointer;
-  transition: transform .15s, box-shadow .2s, border-color .2s;
+  display: flex; flex-direction: column; align-items: stretch; padding: 6px; overflow: hidden;
+  border-radius: 12px; border: 2px solid transparent; background: transparent;
+  text-align: left; cursor: pointer; transition: background .2s, border-color .2s;
 }
-.tema-cartao:hover { transform: translateY(-1px); }
-.tema-cartao:active { transform: scale(0.97); }
-.tema-cartao.escolhido { border-color: var(--destaque); box-shadow: 0 0 0 2px var(--destaque); }
-.tema-cartao .vitrine {
-  display: grid; place-items: center; height: 46px;
-  background: linear-gradient(120deg, #5ac8fa, #5e5ce6 55%, #bf5af2);
-}
-.tema-cartao img { width: 128px; height: 32px; image-rendering: auto; }
-.tema-cartao b { padding: 7px 10px 0; font-size: 13.5px; font-weight: 600; }
-.tema-cartao small { padding: 1px 10px 8px; font-size: 11.5px; color: var(--texto-2); line-height: 1.25; }
+.tema-cartao:hover { background: var(--realce); }
+.tema-cartao.escolhido { border-color: var(--destaque); background: var(--selecao); }
+.tema-cartao .vitrine { display: grid; place-items: center; height: 44px; border-radius: 8px; background: var(--vitrine); }
+.tema-cartao img { width: 104px; height: 26px; }
+.tema-cartao b { padding: 6px 4px 0; font-size: 13px; font-weight: 600; }
+.tema-cartao small { padding: 1px 4px 2px; font-size: 11.5px; color: var(--texto-2); line-height: 1.25; }
 .cores-tema { display: none; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
 .cores-tema.visivel { display: flex; }
 .cores-tema label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.cores-tema input[type=color] {
-  width: 38px; height: 28px; padding: 0; border: 1px solid var(--separador); border-radius: 8px; background: none; cursor: pointer;
-}
+.cores-tema label[hidden] { display: none; }
+.cores-tema input[type=color] { width: 38px; height: 28px; padding: 0; border: 1px solid var(--separador); border-radius: 8px; background: none; cursor: pointer; }
 .cores-tema input[type=color]::-webkit-color-swatch-wrapper { padding: 2px; }
 .cores-tema input[type=color]::-webkit-color-swatch { border: 0; border-radius: 6px; }
 .pasta-temas { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
 
-/* Área de teste */
-.grade { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--separador); }
-.ladrilho {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  height: 66px; background: var(--cartao); font-size: 12px; color: var(--texto-2); text-align: center;
-  transition: background .15s;
-}
-.ladrilho:hover { background: color-mix(in srgb, var(--destaque) 10%, var(--cartao)); color: var(--texto); }
-.ladrilho b { font-size: 18px; font-weight: 400; color: var(--texto); line-height: 1; font-family: "Segoe UI Symbol", "Segoe UI", sans-serif; font-variant-emoji: text; }
-.pista {
-  position: relative; height: 150px; cursor: default;
-  background:
-    linear-gradient(90deg, #fff 0 33.3%, transparent 33.3% 66.6%, #1c1c1e 66.6%),
-    linear-gradient(120deg, #5ac8fa, #5e5ce6 45%, #bf5af2 70%, #ff9f0a);
-  display: grid; place-items: center;
-}
-.pista span {
-  padding: 6px 12px; border-radius: 999px; font-size: 13px;
-  color: var(--texto); background: var(--cartao); backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--borda-cartao); pointer-events: none;
-}
-
-/* Botões */
-.acoes { display: flex; gap: 10px; margin-top: 24px; }
-.botao {
-  flex: 1; height: 46px; border-radius: 12px; border: 1px solid var(--borda-cartao);
-  background: var(--cartao); backdrop-filter: blur(28px) saturate(170%);
-  box-shadow: var(--sombra-cartao);
-  color: var(--destaque); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
-  transition: transform .15s, color .2s;
-}
-.botao:active { transform: scale(0.97); }
-.botao.perigo { color: var(--vermelho); }
-.atalhos { margin: 18px 16px 0; text-align: center; font-size: 12.5px; color: var(--texto-2); }
-kbd {
-  font: inherit; font-size: 12px; padding: 1px 6px; border-radius: 5px;
-  background: var(--seg-fundo); color: var(--texto);
-}
-
-/* Atualização e relatos */
 .botao-linha {
   flex: none; height: 32px; padding: 0 14px; border-radius: 16px; border: 0;
-  background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--destaque);
-  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform .15s, opacity .2s;
+  background: color-mix(in srgb, var(--destaque) 14%, transparent); color: var(--link);
+  font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .15s;
 }
 .botao-linha:active { transform: scale(0.96); }
-.botao-linha:disabled { opacity: 0.5; cursor: default; }
 .botao-linha.forte { background: var(--destaque); color: #fff; }
-.novidade { color: var(--verde); font-weight: 600; }
-.erro { color: var(--vermelho); }
-.relato { display: none; margin-top: 12px; }
-.relato.aberto { display: block; animation: surgir .3s cubic-bezier(.2, .8, .2, 1) both; }
+
+/* Relato de bug, numa folha de vidro */
+.modal-fundo { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.35); padding: 16px; }
+.modal-fundo[hidden] { display: none; }
+.modal-fundo .caixa { width: min(520px, 100%); border-radius: 18px; padding: 16px; background: var(--material); backdrop-filter: blur(40px) saturate(160%); border: 1px solid var(--borda-janela); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35); }
 .relato input, .relato textarea {
   width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--separador);
-  background: var(--seg-fundo); color: var(--texto); font: inherit; font-size: 14px; user-select: text; resize: vertical;
+  background: var(--grupo); color: var(--texto); font: inherit; font-size: 14px; user-select: text; resize: vertical;
 }
 .relato textarea { min-height: 96px; }
 .relato input:focus, .relato textarea:focus { outline: 2px solid color-mix(in srgb, var(--destaque) 50%, transparent); outline-offset: 0; }
 .relato .segmentado[data-v=sugestao] .pilula { transform: translateX(100%); }
 .relato .fim { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
-/* FlowCursor fechado */
+
 #aviso {
   position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 9; max-width: 488px; margin: 0 auto;
-  padding: 14px 16px; border-radius: 14px; font-size: 14px;
-  background: var(--cartao); backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid var(--borda-cartao); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  padding: 14px 16px; border-radius: 16px; font-size: 14px;
 }
 #aviso b { color: var(--vermelho); }
 body.desligado main { opacity: 0.45; pointer-events: none; filter: saturate(0.4); transition: opacity .3s; }
+
+/* Janela estreita: some a barra lateral */
+@media (max-width: 720px) {
+  nav, .janela::before { display: none; }
+  .grade { grid-template-columns: repeat(4, 1fr); }
+}
 </style>
 </head>
 <body>
 <div class="fundo" aria-hidden="true"><i></i><i></i><i></i></div>
 
-<header id="topo">
-  <div class="topo-linha">
-    <img class="app-icone" src="/icone.svg" alt="">
-    <div class="titulos">
-      <h1>FlowCursor</h1>
-      <p id="status">Conectando…</p>
+<div class="janela">
+  <nav class="vidro" aria-label="Seções">
+    <div class="marca">
+      <img class="app-icone" src="/icone.svg" alt="">
+      <div><b>FlowCursor</b><small id="versao">&nbsp;</small></div>
     </div>
-    <button id="btnAtualizar" class="pilula-botao" title="Procura a versão mais nova no GitHub e atualiza">Procurar atualização</button>
-    <button id="btnBug" class="pilula-botao" title="Relatar um problema ou sugerir algo no GitHub">Reportar bug</button>
-    <button id="reiniciar" class="reiniciar" title="Reiniciar o FlowCursor: fecha, devolve o ponteiro normal e abre de novo. Resolve a maioria dos travamentos." aria-label="Reiniciar o FlowCursor">↻</button>
-    <label class="chave" title="Ligar ou pausar (Ctrl+Alt+F9)">
-      <input type="checkbox" id="ativo" aria-label="FlowCursor ativo"><span></span>
-    </label>
+    <div id="itensNav"></div>
+    <div class="espaco"></div>
+    <p id="resumo"></p>
+    <div class="atalhos"><kbd>Ctrl+Alt+F9</kbd> pausa<br><kbd>Ctrl+Alt+F10</kbd> devolve o ponteiro normal</div>
+  </nav>
+
+  <div class="conteudo" id="rolagem">
+    <header id="topo">
+      <div class="titulos">
+        <h1>Ajustes</h1>
+        <p id="status">Conectando…</p>
+      </div>
+      <button id="btnNovaVersao" hidden></button>
+      <label class="capsula vidro" id="capsulaAtivo" title="Ligar ou pausar (Ctrl+Alt+F9)">
+        <span class="ponto" aria-hidden="true"></span>
+        <b id="rotuloAtivo">Ativo</b>
+        <span class="chave"><input type="checkbox" id="ativo" aria-label="FlowCursor ativo"><span></span></span>
+      </label>
+      <button id="btnMais" class="redondo vidro" aria-label="Mais opções" aria-haspopup="menu" aria-expanded="false">
+        <svg viewBox="0 0 18 18" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="9" r="1.6"/><circle cx="9" cy="9" r="1.6"/><circle cx="14.5" cy="9" r="1.6"/></svg>
+        <span class="aviso-ponto"></span>
+      </button>
+      <div id="menu" class="menu vidro" role="menu" hidden>
+        <button id="btnAtualizar" role="menuitem">Procurar atualização</button>
+        <button id="btnBug" role="menuitem">Reportar bug ou sugerir…</button>
+        <button id="btnRegistro" role="menuitem">Abrir registro</button>
+        <hr>
+        <button id="reiniciar" role="menuitem" title="Fecha, devolve o ponteiro normal e abre de novo. Resolve a maioria dos travamentos.">Reiniciar e devolver o ponteiro</button>
+        <button id="restaurar" role="menuitem" class="perigo">Restaurar todos os padrões…</button>
+      </div>
+    </header>
+    <main id="conteudo"></main>
   </div>
-</header>
+</div>
 
-<main id="conteudo"></main>
+<div id="modalBug" class="modal-fundo" hidden><div class="caixa"><div class="cabeca"><span class="nome"><b>Reportar bug ou sugerir</b></span><button class="botao-linha fechar">Fechar</button></div></div></div>
 
-<div id="modalBug" class="modal-fundo" hidden><div class="caixa"><div class="cabeca"><span class="nome">Reportar bug ou sugerir</span><button class="botao-linha fechar">Fechar</button></div></div></div>
-
-<div id="aviso" hidden><b>O FlowCursor foi fechado.</b> Abra o FlowCursor de novo pelo atalho para continuar ajustando.</div>
+<div id="aviso" class="vidro" hidden><b>O FlowCursor foi fechado.</b> Abra o FlowCursor de novo pelo atalho para continuar ajustando.</div>
 
 <script>
 const CHAVE = new URLSearchParams(location.search).get('t') || '';
 
-document.getElementById('reiniciar').onclick = async (e) => {
-  const b = e.currentTarget;
-  b.classList.add('girando');
-  document.getElementById('status').textContent = 'Reiniciando… a tela de ajustes abre de novo em instantes.';
-  try { await api('/api/reiniciar', ''); } catch (_) { b.classList.remove('girando'); }
-};
 async function api(rota, corpo) {
   const r = await fetch(rota, {
     method: corpo === undefined ? 'GET' : 'POST',
@@ -374,49 +400,62 @@ async function api(rota, corpo) {
 
 const pct = v => Math.round(v) + '%';
 
+// Ícones da barra lateral (traço simples, como os símbolos da Apple)
+const ICONES = {
+  teste: ['#5e5ce6', '<path d="M3 2v10l3-2.5 2 4 1.6-.8-2-3.9H11z" fill="currentColor"/>'],
+  tema: ['#ff9500', '<circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 2a5 5 0 0 0 0 10z" fill="currentColor"/>'],
+  aparencia: ['#007aff', '<rect x="2" y="2" width="10" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/>'],
+  movimento: ['#34c759', '<path d="M1.5 9c2-5 4-5 5.5 0s3.5 5 5.5 0" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'],
+  efeitos: ['#ff2d55', '<path d="M7 1.5l1.4 3.6 3.6 1.4-3.6 1.4L7 11.5 5.6 7.9 2 6.5l3.6-1.4z" fill="currentColor"/>'],
+  alttab: ['#00a7c4', '<rect x="1.5" y="3" width="5" height="8" rx="1.2" fill="currentColor"/><rect x="7.5" y="3" width="5" height="8" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/>'],
+  geral: ['#8e8e93', '<circle cx="7" cy="7" r="2" fill="currentColor"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M2.8 11.2l1.4-1.4M9.8 4.2l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'],
+};
+
 const SECOES = [
-  { titulo: 'Aparência', linhas: [
+  { id: 'aparencia', titulo: 'Aparência', linhas: [
     { id: 'tamanho', nome: 'Tamanho', min: 0.5, max: 3, passo: 0.05, fmt: v => Math.round(v * 100) + '%',
       legenda: '100% é o tamanho do ponteiro padrão do Windows.' },
     { id: 'sombra', nome: 'Sombra', min: 0, max: 100, passo: 1, fmt: pct },
+    { id: 'grudar_botoes', tipo: 'chave', nome: 'Grudar nos botões',
+      legenda: 'Nos temas de vidro, o ponteiro vira uma pílula do tamanho do botão embaixo dele.' },
   ]},
-  { titulo: 'Movimento', rodape: 'A mola muda só o desenho: o clique acontece sempre no ponto real do mouse.', linhas: [
+  { id: 'movimento', titulo: 'Movimento', rodape: 'A mola muda só o desenho: o clique acontece sempre no ponto real do mouse.', linhas: [
     { id: 'responsividade', nome: 'Responsividade', min: 0, max: 100, passo: 1,
-      fmt: v => v >= 99.5 ? 'sem mola' : pct(v), legenda: 'Quanto o desenho acompanha o ponteiro real.' },
+      fmt: v => v >= 99.5 ? 'sem mola' : pct(v), legenda: 'Quanto o desenho gruda no ponteiro real.' },
     { id: 'elasticidade', nome: 'Elasticidade', min: 0, max: 100, passo: 1, fmt: pct,
       legenda: 'Passa um pouco do ponto e volta, como uma mola.' },
     { id: 'antecipacao', nome: 'Antecipação', min: 0, max: 100, passo: 1, fmt: pct,
       legenda: 'Compensa o atraso da mola em movimentos contínuos.' },
   ]},
-  { titulo: 'Efeitos', linhas: [
+  { id: 'efeitos', titulo: 'Efeitos', linhas: [
     { id: 'borrao', nome: 'Borrão de movimento', min: 0, max: 100, passo: 1, fmt: pct,
       legenda: 'Cresce com a velocidade; parado, o ponteiro fica nítido.' },
     { id: 'rastro', nome: 'Comprimento do rastro', min: 0, max: 100, passo: 1,
       fmt: v => v == 0 ? 'desligado' : Math.round(v * 1.4) + ' ms',
-      legenda: 'Cópias da própria seta que ficam pelo caminho nos movimentos rápidos.' },
+      legenda: 'Cópias da seta que ficam pelo caminho nos movimentos rápidos.' },
     { id: 'rastro_intensidade', nome: 'Intensidade do rastro', min: 0, max: 100, passo: 1, fmt: pct },
     { id: 'rastro_velocidade', nome: 'Rastro a partir de', min: 300, max: 6000, passo: 100,
       fmt: v => Math.round(v).toLocaleString('pt-BR') + ' px/s', legenda: 'Velocidade mínima para o rastro aparecer.' },
     { id: 'clique', tipo: 'chave', nome: 'Encolher ao clicar' },
     { id: 'onda_clique', tipo: 'chave', nome: 'Onda no clique' },
   ]},
-  { titulo: 'Alt+Tab', coluna: 'direita', linhas: [
+  { id: 'alttab', titulo: 'Alt+Tab', linhas: [
     { id: 'alternador', tipo: 'chave', nome: 'Alt+Tab do FlowCursor',
-      legenda: 'Miniaturas ao vivo agrupadas por aplicativo. Pare o mouse sobre uma miniatura para ver a janela inteira; digite para buscar. Desligado, volta o do Windows.' },
+      legenda: 'Miniaturas ao vivo agrupadas por aplicativo; digite para buscar. Desligado, volta o do Windows.' },
     { id: 'alttab_transparencia', nome: 'Transparência', min: 0, max: 100, passo: 1, fmt: pct,
       legenda: 'Quanto do que está atrás do painel aparece através do vidro.' },
     { id: 'alttab_fosco', nome: 'Fosco', min: 0, max: 100, passo: 1,
       fmt: v => v < 25 ? 'vidro limpo' : v > 85 ? 'leitoso' : pct(v), marca: 25,
-      legenda: 'Até a marca o vidro é limpo, sem desfoque (com a transparência em 100% só fica a borda, como o Liquid Glass transparente); depois da marca o fundo vai desfocando até ficar leitoso.' },
+      legenda: 'Até a marca, vidro limpo; depois dela o fundo desfoca até ficar leitoso.' },
     { id: 'alttab_cor', nome: 'Cor dos cartões', min: 0, max: 100, passo: 1,
       fmt: v => v == 0 ? 'desligada' : pct(v), legenda: 'Tom do ícone de cada aplicativo no topo do cartão.' },
     { id: 'alttab_tamanho', nome: 'Tamanho das miniaturas', min: 0, max: 100, passo: 1,
       fmt: v => v <= 20 ? 'lista ' + Math.round(v / 20 * 100) + '%' : pct(v), marca: 20,
-      legenda: 'Até a marca azul o painel é uma lista com o ícone e o nome inteiro de cada janela (no mínimo, compacta como um menu); depois da marca, miniaturas. Com janelas demais para caber, a lista aparece sozinha.' },
+      legenda: 'Até a marca azul é uma lista com ícone e nome; depois, miniaturas.' },
     { id: 'alttab_painel', nome: 'Tamanho do painel', min: 40, max: 100, passo: 1,
       fmt: v => pct(v) + ' da tela', legenda: 'Até quanto da tela o painel pode ocupar.' },
   ]},
-  { titulo: 'Geral', coluna: 'direita', linhas: [
+  { id: 'geral', titulo: 'Geral', linhas: [
     { id: 'desativar_tela_cheia', tipo: 'chave', nome: 'Ponteiro normal em tela cheia',
       legenda: 'Jogos e vídeos em tela cheia usam o ponteiro do Windows.' },
     { id: 'iniciar', tipo: 'chave', nome: 'Abrir junto com o Windows', fora: true },
@@ -441,66 +480,81 @@ function el(tag, classe, html) {
   return e;
 }
 
+// Barra lateral: cada item rola até a sua seção e fica marcado enquanto ela está à vista.
+function itemNav(id, nome) {
+  const [cor, desenho] = ICONES[id];
+  const b = el('button', 'item-nav', `<i style="background:${cor}"><svg viewBox="0 0 14 14" aria-hidden="true">${desenho}</svg></i>${nome}`);
+  b.dataset.alvo = id;
+  b.onclick = () => document.getElementById('sec-' + id).scrollIntoView();
+  document.getElementById('itensNav').append(b);
+}
+function acompanharRolagem() {
+  const itens = [...document.querySelectorAll('.item-nav')];
+  const rolagem = document.getElementById('rolagem');
+  const marcar = () => {
+    let atual = itens[0];
+    for (const b of itens) {
+      const s = document.getElementById('sec-' + b.dataset.alvo);
+      if (s && s.getBoundingClientRect().top - 120 <= 0) atual = b;
+    }
+    if (rolagem.scrollTop + rolagem.clientHeight >= rolagem.scrollHeight - 4) atual = itens[itens.length - 1];
+    itens.forEach(b => b.classList.toggle('atual', b === atual));
+    document.getElementById('topo').classList.toggle('rolado', rolagem.scrollTop > 4);
+  };
+  rolagem.addEventListener('scroll', marcar, { passive: true });
+  marcar();
+}
+
 function montar() {
   const conteudo = document.getElementById('conteudo');
-  const colunas = el('div', 'colunas');
-  const main = el('div', 'coluna');
-  const direita = el('div', 'coluna');
-  colunas.append(main, direita);
-  const topo = el('div', 'topo-acoes');
-  const resumo = el('span', '', '');
-  resumo.id = 'resumo';
-  const botao = el('button', 'pilula-botao', '↺ Restaurar padrões');
-  botao.id = 'restaurar';
-  botao.onclick = () => confirmarPadrao(botao);
-  topo.append(resumo, botao);
-  conteudo.append(topo, colunas);
-  for (const s of SECOES) {
-    const sec = el('section');
-    sec.append(el('h2', '', s.titulo));
-    const cartao = el('div', 'cartao');
-    for (const l of s.linhas) cartao.append(linha(l));
-    sec.append(cartao);
-    if (s.rodape) sec.append(el('p', 'rodape', s.rodape));
-    (s.coluna === 'direita' ? direita : main).append(sec);
-  }
 
-  // embaixo, lado a lado: a área de teste e os temas (escolhe e já testa ao lado)
-  const baixo = el('div', 'colunas');
-  const baixoEsq = el('div', 'coluna');
-  const baixoDir = el('div', 'coluna');
-  baixo.append(baixoEsq, baixoDir);
-  conteudo.append(baixo);
-  const secTema = el('section');
-  secTema.append(el('h2', '', 'Tema do ponteiro'));
-  const cartaoTema = el('div', 'cartao');
-  cartaoTema.append(linha({ tipo: 'tema', nome: 'Tema' }));
-  secTema.append(cartaoTema);
-  baixoDir.append(secTema);
-
-  const sec = el('section');
-  sec.append(el('h2', '', 'Área de teste'));
-  const cartao = el('div', 'cartao');
+  // área de teste no topo, com as formas logo abaixo
+  const teste = el('section');
+  teste.id = 'sec-teste';
+  const vitrine = el('div', 'vitrine-teste');
+  const pista = el('div', 'pista', '<span>Mova o mouse rápido por aqui</span>');
+  const capsula = el('div', 'capsula vidro');
+  const bPista = el('button', 'ativo', 'Área de teste');
+  const bFormas = el('button', '', 'Formas');
+  const bAltTab = el('button', '', 'Ver o Alt+Tab');
+  capsula.append(bPista, bFormas, bAltTab);
+  pista.append(capsula);
   const grade = el('div', 'grade');
+  grade.hidden = true;
   for (const [cursor, glifo, nome] of TESTES) {
     const t = el('div', 'ladrilho', `<b>${glifo}</b>${nome}`);
     t.style.cursor = cursor;
     grade.append(t);
   }
-  cartao.append(grade, el('div', 'pista', '<span>Mova o mouse rápido por aqui</span>'));
-  sec.append(cartao, el('p', 'rodape', 'Passe o mouse nos quadrados para ver cada forma. Os ajustes e o tema valem na hora.'));
-  baixoEsq.append(sec);
+  bPista.onclick = () => { grade.hidden = true; bPista.classList.add('ativo'); bFormas.classList.remove('ativo'); };
+  bFormas.onclick = () => { grade.hidden = false; bFormas.classList.add('ativo'); bPista.classList.remove('ativo'); };
+  bAltTab.onclick = () => api('/api/alttab', '').catch(desconectado);
+  vitrine.append(pista, grade);
+  teste.append(vitrine, el('p', 'rodape', 'Os ajustes e o tema valem na hora. Em "Formas", passe o mouse em cada quadrado.'));
+  conteudo.append(teste);
+  itemNav('teste', 'Área de teste');
 
-  direita.append(secaoAtualizacao());
+  const secTema = el('section');
+  secTema.id = 'sec-tema';
+  secTema.append(el('h2', '', 'Tema do ponteiro'));
+  const cartaoTema = el('div', 'cartao');
+  cartaoTema.append(linha({ tipo: 'tema', nome: 'Tema' }));
+  secTema.append(cartaoTema);
+  conteudo.append(secTema);
+  itemNav('tema', 'Tema');
 
-  const acoes = el('div', 'acoes');
-  const registro = el('button', 'botao', 'Abrir registro');
-  registro.onclick = () => api('/api/registro', '').catch(desconectado);
-  const verAltTab = el('button', 'botao', 'Ver o Alt+Tab');
-  verAltTab.onclick = () => api('/api/alttab', '').catch(desconectado);
-  acoes.append(verAltTab, registro);
-  direita.append(acoes);
-  direita.append(el('p', 'atalhos', '<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F9</kbd> pausa &nbsp;·&nbsp; <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F10</kbd> fecha e devolve o ponteiro normal<br><span id="versao"></span>'));
+  for (const s of SECOES) {
+    const sec = el('section');
+    sec.id = 'sec-' + s.id;
+    sec.append(el('h2', '', s.titulo));
+    const cartao = el('div', 'cartao');
+    for (const l of s.linhas) cartao.append(linha(l));
+    sec.append(cartao);
+    if (s.rodape) sec.append(el('p', 'rodape', s.rodape));
+    conteudo.append(sec);
+    itemNav(s.id, s.titulo);
+  }
+  acompanharRolagem();
 }
 
 function formularioRelato(aoEnviar) {
@@ -523,9 +577,28 @@ function formularioRelato(aoEnviar) {
   return { form, titulo, texto };
 }
 
-// Botões fixos do topo: atualização e relato de bug, sempre à vista.
+// Menu "⋯": atualização, relato, registro, reiniciar e restaurar padrões.
+function menuMais() {
+  const menu = document.getElementById('menu'), mais = document.getElementById('btnMais');
+  const abrir = (sim) => { menu.hidden = !sim; mais.setAttribute('aria-expanded', sim); if (sim) menu.querySelector('button').focus(); };
+  mais.onclick = (e) => { e.stopPropagation(); abrir(menu.hidden); };
+  document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target)) abrir(false); });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { abrir(false); mais.focus(); } });
+  document.getElementById('btnRegistro').onclick = () => { abrir(false); api('/api/registro', '').catch(desconectado); };
+  document.getElementById('restaurar').onclick = (e) => { e.stopPropagation(); confirmarPadrao(e.currentTarget); };
+  document.getElementById('reiniciar').onclick = async () => {
+    abrir(false);
+    document.getElementById('status').textContent = 'Reiniciando… a tela de ajustes abre de novo em instantes.';
+    try { await api('/api/reiniciar', ''); } catch (_) { }
+  };
+  return abrir;
+}
+const abrirMenu = menuMais();
+
+// Atualização e relato de bug: no menu, e um botão azul no topo quando há versão nova.
 function botoesTopo() {
   const ba = document.getElementById('btnAtualizar'), bb = document.getElementById('btnBug');
+  const nova = document.getElementById('btnNovaVersao'), mais = document.getElementById('btnMais');
   const status = document.getElementById('status');
   let pronta = null;
   const procurar = async (silencioso) => {
@@ -538,89 +611,40 @@ function botoesTopo() {
     } catch (e) { if (!silencioso) status.textContent = 'Não deu para procurar agora.'; }
     ba.disabled = false;
     ba.textContent = pronta ? `Atualizar para ${pronta}` : 'Procurar atualização';
-    ba.classList.toggle('confirmar', !!pronta);
+    nova.hidden = !pronta;
+    nova.textContent = pronta ? `Atualizar para ${pronta}` : '';
+    mais.classList.toggle('com-aviso', !!pronta);
   };
-  ba.onclick = async () => {
-    if (!pronta) return procurar(false);
-    ba.disabled = true; ba.textContent = 'Baixando…';
+  const atualizar = async () => {
+    abrirMenu(false);
+    nova.disabled = ba.disabled = true; nova.textContent = 'Baixando…';
     status.textContent = 'Baixando e instalando. O FlowCursor fecha e abre de novo sozinho em alguns segundos.';
     try { await api('/api/atualizar', ''); }
-    catch (e) { status.textContent = e.message || 'A atualização não deu certo.'; ba.disabled = false; ba.textContent = `Atualizar para ${pronta}`; }
+    catch (e) { status.textContent = e.message || 'A atualização não deu certo.'; nova.disabled = ba.disabled = false; nova.textContent = `Atualizar para ${pronta}`; }
   };
+  ba.onclick = (e) => { e.stopPropagation(); return pronta ? atualizar() : procurar(false); };
+  nova.onclick = atualizar;
   setTimeout(() => procurar(true), 800);
 
   const fundo = document.getElementById('modalBug'), caixa = fundo.querySelector('.caixa');
   const { form, titulo } = formularioRelato(() => { fundo.hidden = true; });
-  form.classList.add('aberto');
   caixa.append(form);
-  bb.onclick = () => { fundo.hidden = false; titulo.focus(); };
+  bb.onclick = () => { abrirMenu(false); fundo.hidden = false; titulo.focus(); };
   fundo.querySelector('.fechar').onclick = () => { fundo.hidden = true; };
   fundo.onclick = (e) => { if (e.target === fundo) fundo.hidden = true; };
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') fundo.hidden = true; });
 }
 botoesTopo();
 
-function secaoAtualizacao() {
-  const sec = el('section');
-  sec.append(el('h2', '', 'Atualização e sugestões'));
-  const cartao = el('div', 'cartao');
-
-  // versão e atualização pelo GitHub
-  const lv = el('div', 'linha');
-  const cab = el('div', 'cabeca', '<span class="nome">Atualização</span>');
-  const botao = el('button', 'botao-linha', 'Procurar');
-  cab.append(botao);
-  const leg = el('div', 'legenda', 'Procura a versão mais nova no GitHub.');
-  lv.append(cab, leg);
-  let pronta = null;
-  const procurar = async (silencioso) => {
-    botao.disabled = true; botao.textContent = 'Procurando…';
-    try {
-      const r = await api('/api/atualizacao');
-      if (r.erro) { if (!silencioso) leg.innerHTML = `<span class="erro">Não deu para procurar: ${r.erro}.</span>`; }
-      else if (r.disponivel) {
-        pronta = r.ultima;
-        leg.innerHTML = `<span class="novidade">Versão ${r.ultima} disponível.</span> Você está na ${r.atual}. Os seus ajustes são mantidos.`;
-      } else leg.textContent = `Você está na versão mais nova (${r.atual}).`;
-    } catch (e) { if (!silencioso) leg.innerHTML = '<span class="erro">Não deu para procurar agora.</span>'; }
-    botao.disabled = false;
-    botao.textContent = pronta ? `Atualizar para ${pronta}` : 'Procurar';
-    botao.classList.toggle('forte', !!pronta);
-  };
-  botao.onclick = async () => {
-    if (!pronta) return procurar(false);
-    botao.disabled = true; botao.textContent = 'Baixando…';
-    leg.textContent = 'Baixando e instalando. O FlowCursor fecha e abre de novo sozinho em alguns segundos.';
-    try { await api('/api/atualizar', ''); }
-    catch (e) {
-      leg.innerHTML = `<span class="erro">${e.message || 'A atualização não deu certo.'}</span>`;
-      botao.disabled = false; botao.textContent = `Atualizar para ${pronta}`;
-    }
-  };
-  cartao.append(lv);
-  setTimeout(() => procurar(true), 600);
-
-  // relatar problema ou sugerir
-  const lr = el('div', 'linha');
-  const cabR = el('div', 'cabeca', '<span class="nome">Relatar problema ou sugerir</span>');
-  const abrir = el('button', 'botao-linha', 'Escrever');
-  cabR.append(abrir);
-  const { form, titulo, texto } = formularioRelato(() => form.classList.remove('aberto'));
-  abrir.onclick = () => { form.classList.toggle('aberto'); if (form.classList.contains('aberto')) titulo.focus(); };
-  lr.append(cabR, form);
-  cartao.append(lr);
-  sec.append(cartao);
-  return sec;
-}
-
-function linha(l) {  const d = el('div', 'linha');
+function linha(l) {
+  const d = el('div', 'linha');
   if (l.tipo === 'tema') {
     const cab = el('div', 'cabeca', `<span class="nome">${l.nome}</span>`);
     cab.append(botaoVolta('tema'));
     d.append(cab, el('div', 'legenda', 'Os do FlowCursor são desenhados na hora e ficam nítidos em qualquer tamanho.'));
     const lista = el('div');
     const cores = el('div', 'cores-tema');
-    cores.innerHTML = '<label><input type="color" data-k="cor_preenchimento">Miolo</label><label><input type="color" data-k="cor_contorno">Borda</label>';
+    cores.innerHTML = '<label><input type="color" data-k="cor_preenchimento"><span class="rotulo-cor">Miolo</span></label><label class="so-cores"><input type="color" data-k="cor_contorno">Borda</label>';
     const pasta = el('div', 'pasta-temas',
       '<span class="legenda">Seus temas: pastas com cursores .cur, .ani ou .png (ou um pacote com install.inf) dentro da pasta cursores.</span>');
     const abrirPasta = el('button', 'botao-linha', 'Abrir pasta');
@@ -629,10 +653,14 @@ function linha(l) {  const d = el('div', 'linha');
     d.append(lista, cores, pasta);
     let versao = 0;
     const previa = id => `/api/previa?id=${encodeURIComponent(id)}&t=${CHAVE}&v=${versao}` +
-      (id === 'cores' && cfg ? `&cor_preenchimento=${cfg.cor_preenchimento}&cor_contorno=${cfg.cor_contorno}` : '');
+      (COM_COR.includes(id) && cfg ? `&cor_preenchimento=${cfg.cor_preenchimento}&cor_contorno=${cfg.cor_contorno}` : '');
+    // temas que usam a cor escolhida (o Cristal só usa a do miolo)
+    const COM_COR = ['cores', 'cristal'];
     const marcar = v => {
       lista.querySelectorAll('.tema-cartao').forEach(c => c.classList.toggle('escolhido', c.dataset.id === v));
-      cores.classList.toggle('visivel', v === 'cores');
+      cores.classList.toggle('visivel', COM_COR.includes(v));
+      cores.querySelector('.so-cores').hidden = v !== 'cores';
+      cores.querySelector('.rotulo-cor').textContent = v === 'cores' ? 'Miolo' : 'Cor do vidro';
     };
     const desenhar = temas => {
       lista.innerHTML = '';
@@ -666,8 +694,10 @@ function linha(l) {  const d = el('div', 'linha');
       enviar();
       clearTimeout(espera);
       espera = setTimeout(() => {
-        const img = lista.querySelector('.tema-cartao[data-id="cores"] img');
-        if (img) img.src = previa('cores');
+        for (const id of COM_COR) {
+          const img = lista.querySelector(`.tema-cartao[data-id="${id}"] img`);
+          if (img) img.src = previa(id);
+        }
       }, 120);
     });
     const corInput = k => cores.querySelector(`[data-k=${k}]`);
@@ -764,9 +794,11 @@ function estadoGeral(e) {
   }
   document.getElementById('ativo').checked = e.ativo;
   controles.iniciar.definir(e.iniciar);
-  document.getElementById('status').innerHTML = e.ativo
-    ? '<b>Ativo</b> · as mudanças valem na hora'
-    : '<b class="pausado">Pausado</b> · ponteiro normal do Windows';
+  document.getElementById('capsulaAtivo').classList.toggle('pausado', !e.ativo);
+  document.getElementById('rotuloAtivo').textContent = e.ativo ? 'Ativo' : 'Pausado';
+  const status = document.getElementById('status');
+  if (/^(Conectando|Sem conexão|As mudanças|Pausado)/.test(status.textContent))
+    status.textContent = e.ativo ? 'As mudanças valem na hora' : 'Pausado: ponteiro normal do Windows';
   document.getElementById('versao').textContent = 'versão ' + e.versao;
 }
 
@@ -788,15 +820,16 @@ function confirmarPadrao(b) {
   if (b.dataset.confirmar) {
     delete b.dataset.confirmar;
     b.classList.remove('confirmar');
-    b.textContent = '↺ Restaurar padrões';
+    b.textContent = 'Restaurar todos os padrões…';
+    abrirMenu(false);
     api('/api/padrao', '').then(e => { preencher(e.config); estadoGeral(e); }).catch(desconectado);
     return;
   }
   b.dataset.confirmar = '1';
   b.classList.add('confirmar');
-  b.textContent = 'Toque de novo para confirmar';
+  b.textContent = 'Clique de novo para confirmar';
   setTimeout(() => {
-    if (b.dataset.confirmar) { delete b.dataset.confirmar; b.classList.remove('confirmar'); b.textContent = '↺ Restaurar padrões'; diferencas(); }
+    if (b.dataset.confirmar) { delete b.dataset.confirmar; b.classList.remove('confirmar'); b.textContent = 'Restaurar todos os padrões…'; diferencas(); }
   }, 3000);
 }
 
@@ -812,8 +845,6 @@ function desconectado() {
 
 document.getElementById('ativo').onchange = e =>
   api('/api/ativo', e.target.checked ? 'sim' : 'nao').then(estadoGeral).catch(desconectado);
-
-addEventListener('scroll', () => document.getElementById('topo').classList.toggle('rolado', scrollY > 4), { passive: true });
 
 // Pausa pelo atalho ou mudança feita direto no .ini aparecem aqui também.
 async function atualizar(inicial) {
