@@ -241,13 +241,16 @@ impl Motor {
         // Ímã: sobre um botão, o ponteiro de vidro se desfaz numa pílula do tamanho dele,
         // que acompanha um pouco o mouse; fora, a pílula volta a ser o ponteiro.
         let botao = if tema.usa_fundo() && cfg.grudar_botoes { crate::alvo::sob(alvo.x as i32, alvo.y as i32) } else { None };
-        let s = escala_base;
+        let lente = tema.vetor.forma == crate::formas::Forma::Lente;
+        // na Lente, as outras formas e a pílula param no tamanho de 100%
+        let s = escala_base * fator_lente(lente, Tipo::Mao, cfg.tamanho);
+        let s_seta = escala_base * fator_lente(lente, Tipo::Seta, cfg.tamanho);
         let alvo_caixa = match botao {
             Some(r) => {
                 let (cx, cy) = ((r.left + r.right) as f32 / 2.0, (r.top + r.bottom) as f32 / 2.0);
                 [r.left as f32 - 4.0 * s + (alvo.x - cx) * 0.06, r.top as f32 - 4.0 * s + (alvo.y - cy) * 0.1, (r.right - r.left) as f32 + 8.0 * s, (r.bottom - r.top) as f32 + 8.0 * s]
             }
-            None => [self.pos.x - 2.0 * s, self.pos.y - 2.0 * s, 16.0 * s, 22.0 * s],
+            None => [self.pos.x - 2.0 * s_seta, self.pos.y - 2.0 * s_seta, 16.0 * s_seta, 22.0 * s_seta],
         };
         let alvo_ima = if botao.is_some() { 1.0 } else { 0.0 };
         let ima_ant = self.ima;
@@ -286,10 +289,10 @@ impl Motor {
             let visivel = 1.0 - self.ima;
             if let Some(ant) = self.tipo_ant {
                 let e = smoothstep(0.0, 1.0, self.transicao);
-                camadas.push(Camada { tipo: ant, alfa: (1.0 - e) * visivel, escala: escala_total });
-                camadas.push(Camada { tipo: self.tipo, alfa: e * visivel, escala: escala_total });
+                camadas.push(Camada { tipo: ant, alfa: (1.0 - e) * visivel, escala: escala_total * fator_lente(lente, ant, cfg.tamanho) });
+                camadas.push(Camada { tipo: self.tipo, alfa: e * visivel, escala: escala_total * fator_lente(lente, self.tipo, cfg.tamanho) });
             } else {
-                camadas.push(Camada { tipo: self.tipo, alfa: visivel, escala: escala_total });
+                camadas.push(Camada { tipo: self.tipo, alfa: visivel, escala: escala_total * fator_lente(lente, self.tipo, cfg.tamanho) });
             }
             self.sprite.renderizar(&camadas, &tema, cfg.sombra, tempo);
             self.sprite_rastro.renderizar(&camadas, &tema, 0.0, tempo);
@@ -399,12 +402,12 @@ impl Motor {
         }
 
         // Vidro: a tela atrás por baixo da forma da frente (Cristal: meio desfocada, mais na
-        // borda; Lente: nítida e ampliada a partir do centro).
+        // borda; Lente: nítida, quase sem ampliar no meio e entortando na borda).
         let lente = self.tema.as_ref().is_some_and(|t| t.vetor.forma == crate::formas::Forma::Lente);
         if let Some(f) = fundo {
             let q = self.pos - origem;
             let (ix, iy) = ((q.x - self.sprite.ox as f32).round() as i32, (q.y - self.sprite.oy as f32).round() as i32);
-            vidro_por_baixo(&self.sprite, ix, iy, (ox, oy, w, h), f, lente, 1.4, &mut self.acum);
+            vidro_por_baixo(&self.sprite, ix, iy, (ox, oy, w, h), f, lente, 1.12, &mut self.acum);
         }
 
         // Pílula do ímã, por baixo do ponteiro (que some enquanto ela aparece).
@@ -416,7 +419,7 @@ impl Motor {
                 *c = p.px[i];
             }
             if let Some(f) = fundo {
-                vidro_por_baixo(p, 0, 0, (ox + ix, oy + iy, p.w, p.h), f, lente, 1.07, &mut camada_pilula);
+                vidro_por_baixo(p, 0, 0, (ox + ix, oy + iy, p.w, p.h), f, lente, 1.03, &mut camada_pilula);
             }
             for j in 0..p.h {
                 for i in 0..p.w {
@@ -548,6 +551,20 @@ impl Motor {
     }
 }
 
+/// Lente líquida: a seta é desenhada 1,85x maior (o 100% dela é o antigo 185%, que era o
+/// tamanho usável) e só ela cresce acima de 100%; texto, mão, espera e a pílula dos botões
+/// já são grandes e param no tamanho de 100%.
+pub const LENTE_SETA: f32 = 1.85;
+pub fn fator_lente(lente: bool, tipo: Tipo, tamanho: f32) -> f32 {
+    if !lente {
+        1.0
+    } else if matches!(tipo, Tipo::Seta | Tipo::SetaEspera) {
+        LENTE_SETA
+    } else {
+        tamanho.min(1.0) / tamanho.max(0.01)
+    }
+}
+
 /// Põe a tela de trás por baixo do vidro do sprite, que está em (ix, iy) no destino.
 /// `area` é (x, y, largura, altura) do destino na tela.
 #[allow(clippy::too_many_arguments)]
@@ -562,11 +579,12 @@ fn vidro_por_baixo(sp: &Sprite, ix: i32, iy: i32, area: (i32, i32, usize, usize)
                 continue;
             }
             let c = if lente {
-                // a lente amplia mais perto da borda, como vidro grosso
+                // Como a Liquid Glass: o meio quase não amplia (fica nítido) e a borda
+                // entorta a imagem, como vidro grosso. A amostra é bicúbica, sem degraus.
                 let p = v2((ox + x) as f32 + 0.5, (oy + y) as f32 + 0.5);
-                let z = zoom * (1.0 + 0.12 * borda);
+                let z = zoom * (1.0 + 0.45 * borda * borda);
                 let o = centro + (p - centro) / z;
-                let Some((n, _)) = f.em(o.x.floor() as i32, o.y.floor() as i32) else { continue };
+                let Some(n) = f.nitido_suave(o.x, o.y) else { continue };
                 n
             } else {
                 let Some((n, b)) = f.em(ox + x, oy + y) else { continue };
@@ -634,5 +652,85 @@ fn sobrepor(sp: &Sprite, q: V2, alfa: f32, dest: &mut [Cor], w: usize, h: usize)
             let d = &mut dest[y as usize * w + x as usize];
             *d = sobre([c[0] * p, c[1] * p, c[2] * p, c[3] * p], *d);
         }
+    }
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    /// Antes e depois da Lente líquida sobre um pedaço real da tela, ampliado 4x para ver os
+    /// pixels. Uso: FLOWCURSOR_TESTE="x,y,pasta" cargo test --release lente_antes_depois -- --ignored
+    #[test]
+    #[ignore]
+    fn lente_antes_depois() {
+        let arg = std::env::var("FLOWCURSOR_TESTE").expect("FLOWCURSOR_TESTE=x,y,pasta");
+        let partes: Vec<&str> = arg.splitn(3, ',').collect();
+        let (x0, y0): (i32, i32) = (partes[0].parse().unwrap(), partes[1].parse().unwrap());
+        let f = crate::captura::de_tela(x0, y0);
+        let cfg = Config { tema: "lente".into(), ..Default::default() };
+        let tema = temas::carregar("lente", &cfg);
+        let mut lado_a_lado = Vec::new();
+        for novo in [false, true] {
+            // antes: slider em 185% (o que o Átila usava); depois: 100% (seta 1,85x)
+            let dpi = crate::sistema::escala_dpi(crate::ffi::POINT { x: x0 + 150, y: y0 + 150 });
+            let escala = dpi * if novo { fator_lente(true, Tipo::Seta, 1.0) } else { 1.85 };
+            let mut sp = Sprite::novo();
+            sp.renderizar(&[Camada { tipo: Tipo::Seta, alfa: 1.0, escala }], &tema, 50.0, 0.0);
+            let (hx, hy) = (x0 + 150, y0 + 150);
+            let (ox, oy) = (hx - sp.ox, hy - sp.oy);
+            let mut dest = sp.px.clone();
+            if novo {
+                vidro_por_baixo(&sp, 0, 0, (ox, oy, sp.w, sp.h), &f, true, 1.12, &mut dest);
+            } else {
+                // a lente antiga: amplia 1,4x pegando o pixel mais próximo
+                let centro = v2(ox as f32 + sp.centro.x, oy as f32 + sp.centro.y);
+                for j in 0..sp.h {
+                    for i in 0..sp.w {
+                        let [cob, borda] = sp.vidro[j * sp.w + i];
+                        if cob <= 0.0 {
+                            continue;
+                        }
+                        let p = v2((ox + i as i32) as f32 + 0.5, (oy + j as i32) as f32 + 0.5);
+                        let o = centro + (p - centro) / (1.4 * (1.0 + 0.12 * borda));
+                        let Some((c, _)) = f.em(o.x.floor() as i32, o.y.floor() as i32) else { continue };
+                        let d = &mut dest[j * sp.w + i];
+                        *d = sobre(*d, [c[0] * cob, c[1] * cob, c[2] * cob, cob.min(1.0)]);
+                    }
+                }
+            }
+            // recorte de 120 px em volta da ponta, sobre a tela, ampliado 4x
+            const R: usize = 120;
+            const Z: usize = 4;
+            let mut img = vec![0u8; R * Z * R * Z * 4];
+            for j in 0..R {
+                for i in 0..R {
+                    let (sx, sy) = (hx - 20 + i as i32, hy - 20 + j as i32);
+                    let fundo = f.em(sx, sy).map_or([0.0; 3], |c| c.0);
+                    let (si, sj) = (sx - ox, sy - oy);
+                    let d = if si >= 0 && sj >= 0 && (si as usize) < sp.w && (sj as usize) < sp.h { dest[sj as usize * sp.w + si as usize] } else { [0.0; 4] };
+                    let c = [0, 1, 2].map(|k| ((d[k] + fundo[k] * (1.0 - d[3].min(1.0))).clamp(0.0, 1.0) * 255.0 + 0.5) as u8);
+                    for dy in 0..Z {
+                        for dx in 0..Z {
+                            let q = ((j * Z + dy) * R * Z + i * Z + dx) * 4;
+                            img[q..q + 4].copy_from_slice(&[c[0], c[1], c[2], 255]);
+                        }
+                    }
+                }
+            }
+            lado_a_lado.push(img);
+        }
+        // as duas lado a lado, com 8 px de separação
+        let (w1, h1) = (480, 480);
+        let w = w1 * 2 + 8;
+        let mut out = vec![255u8; w * h1 * 4];
+        for (k, img) in lado_a_lado.iter().enumerate() {
+            for j in 0..h1 {
+                let a = (j * w + k * (w1 + 8)) * 4;
+                out[a..a + w1 * 4].copy_from_slice(&img[j * w1 * 4..(j + 1) * w1 * 4]);
+            }
+        }
+        let pasta = std::path::Path::new(partes[2]);
+        crate::png::salvar(&pasta.join("lente_antes_depois.png"), w, h1, &out).unwrap();
     }
 }

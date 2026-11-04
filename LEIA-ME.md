@@ -42,8 +42,8 @@ No topo da tela de ajustes ficam sempre à vista os botões **Procurar atualiza�
 ## Ajustes
 
 Pela tela de ajustes, as mudanças valem na hora e há uma área de teste com todos os ponteiros:
-- **Tema:** macOS, Claro, Bibata, Bibata Gelo, iPadOS, Aurora ou suas cores; os cursores originais do Windows (e os esquemas instalados nele); ou temas seus, numa pasta dentro de `cursores` com arquivos .cur, .ani ou .png (o botão *Abrir pasta* mostra onde e explica os nomes).
-- **Tamanho**.
+- **Tema:** macOS, Claro, Bibata, Bibata Gelo, iPadOS, Aurora, os de vidro (Cristal e Lente líquida) ou suas cores; os cursores originais do Windows (e os esquemas instalados nele); ou temas seus, numa pasta dentro de `cursores` com arquivos .cur, .ani ou .png (o botão *Abrir pasta* mostra onde e explica os nomes).
+- **Tamanho**. Na Lente líquida, a seta já vem bem maior (o 100% dela é o antigo 185%) e, acima de 100%, só a seta cresce; texto, mão e a pílula dos botões ficam no tamanho de 100%.
 - **Mola:**
   - responsividade: quanto o desenho gruda no ponteiro;
   - elasticidade: quanto passa do ponto e volta;

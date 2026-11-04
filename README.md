@@ -38,8 +38,9 @@ A tela grava no mesmo arquivo.
 
 | chave | o que faz |
 |---|---|
-| `tema` | Desenhados pelo FlowCursor: `macos`, `claro`, `bibata`, `bibata_gelo`, `ipados`, `aurora`, `cores` (com `cor_preenchimento` e `cor_contorno` em RRGGBB). Do Windows: `windows` (os originais) ou `esquema:<nome>`. Seus: `pasta:<nome>`, uma pasta dentro de `cursores\` com .cur, .ani ou .png (ou um pacote com install.inf) |
-| `tamanho` | 1.0 = tamanho do ponteiro padrão |
+| `tema` | Desenhados pelo FlowCursor: `macos`, `claro`, `bibata`, `bibata_gelo`, `ipados`, `aurora`, `cristal`, `lente` (os dois de vidro), `cores` (com `cor_preenchimento` e `cor_contorno` em RRGGBB). Do Windows: `windows` (os originais) ou `esquema:<nome>`. Seus: `pasta:<nome>`, uma pasta dentro de `cursores\` com .cur, .ani ou .png (ou um pacote com install.inf) |
+| `tamanho` | 1.0 = tamanho do ponteiro padrão. Na `lente`, a seta é desenhada 1,85x maior e só ela cresce acima de 1.0; as outras formas e a pílula dos botões param no tamanho de 1.0 |
+| `grudar_botoes` | temas de vidro: o ponteiro vira uma pílula do tamanho do botão embaixo dele |
 | `responsividade` | quanto o desenho cola no ponteiro real (100 = sem mola) |
 | `elasticidade` | quanto passa do ponto e volta |
 | `antecipacao` | compensa o atraso da mola em movimento contínuo |
@@ -50,6 +51,23 @@ A tela grava no mesmo arquivo.
 | `alttab_fosco`, `alttab_cor` | vidro do painel do Alt+Tab e cor no topo dos cartões (0 a 100) |
 | `alttab_tamanho` | tamanho das miniaturas do Alt+Tab; até 10 vira lista com o nome inteiro |
 | `alttab_painel` | quanto da tela o painel do Alt+Tab pode ocupar (40 a 100%) |
+
+## Temas de vidro (Cristal e Lente líquida)
+
+Uma linha de execução própria (`src/captura.rs`) copia 384x384 px da tela em volta do
+ponteiro, na resolução nativa do monitor (o programa é DPI-aware por monitor), ~40 vezes por
+segundo com o mouse andando. As janelas do FlowCursor ficam fora dessa cópia
+(`WDA_EXCLUDEFROMCAPTURE`), por isso também não aparecem em prints e gravações.
+
+- **Cristal:** a tela atrás meio desfocada, mais na borda.
+- **Lente líquida:** a tela atrás nítida. O meio quase não amplia (1,12x) e a borda entorta a
+  imagem (até ~1,6x), como a Liquid Glass. A amostra é bicúbica (Catmull-Rom, 4x4 vizinhos):
+  antes era 1,4x pegando o pixel mais próximo, e o que aparecia dentro ficava em degraus.
+  A Apple fica nítida porque redesenha os elementos vetoriais atrás do vidro; aqui só existem
+  os pixels da tela, então ampliar muito sempre borra. Por isso a lente amplia pouco.
+- Comparar antes e depois: `$env:FLOWCURSOR_TESTE="x,y,pasta"; cargo test --release lente_antes_depois -- --ignored`
+  grava `lente_antes_depois.png` (lente antiga à esquerda, nova à direita, sobre o pedaço da
+  tela em x,y, ampliado 4x).
 
 ## Alt+Tab
 
