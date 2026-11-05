@@ -389,6 +389,12 @@ fn arredondar(poli: &[V2], r: f32) -> (Vec<V2>, V2) {
 /// mesma cor, linha clara por dentro e luz na borda de cima. Lente: vidro limpo (o motor
 /// mostra a tela ampliada), fio branco na borda, luz em cima e sombra suave embaixo.
 fn vidro_partes(sdf: Rc<dyn Fn(V2) -> f32>, pal: &Paleta, lente: bool) -> Vec<Parte> {
+    vidro_partes_k(sdf, pal, lente, 1.0)
+}
+
+/// O mesmo vidro com as faixas de luz em `k` vezes a largura: forma fina pede faixa fina,
+/// senão a luz passa do meio da forma.
+fn vidro_partes_k(sdf: Rc<dyn Fn(V2) -> f32>, pal: &Paleta, lente: bool, k: f32) -> Vec<Parte> {
     let c = pal.preenchimento;
     let (miolo, contorno, largura, linha) = if lente {
         ([1.0, 1.0, 1.0, 0.03], [0.08, 0.08, 0.16, 0.3], 0.8, [1.0, 1.0, 1.0, 0.95])
@@ -432,24 +438,18 @@ fn vidro_partes(sdf: Rc<dyn Fn(V2) -> f32>, pal: &Paleta, lente: bool) -> Vec<Pa
             cor: None,
             vidro: false,
         },
-        faixa(sdf.clone(), 2.6, 1.7, [1.0, 1.0, 1.0, if lente { 0.55 } else { 0.5 }], v2(0.55, 0.83)),
+        faixa(sdf.clone(), 2.6 * k, 1.7 * k, [1.0, 1.0, 1.0, if lente { 0.55 } else { 0.5 }], v2(0.55, 0.83)),
     ];
     if lente {
-        v.push(faixa(sdf, 2.4, 1.9, [0.08, 0.08, 0.2, 0.16], v2(-0.55, -0.83)));
+        v.push(faixa(sdf, 2.4 * k, 1.9 * k, [0.08, 0.08, 0.2, 0.16], v2(-0.55, -0.83)));
     }
     v
 }
 
-fn partes_vidro(tipo: Tipo, pal: &Paleta, tempo: f32, lente: bool) -> Vec<Parte> {
+fn partes_vidro(tipo: Tipo, pal: &Paleta, tempo: f32) -> Vec<Parte> {
     let forma: Rc<dyn Fn(V2) -> f32> = match tipo {
-        Tipo::Seta | Tipo::SetaEspera if lente => {
-            // a lente é gorda e redonda, como uma bala de goma
-            let r = 2.6;
-            let (dentro, desloc) = arredondar(&SETA_SC, r);
-            Rc::new(move |p| sd_poligono(p - desloc, &dentro) - r)
-        }
         Tipo::Seta | Tipo::SetaEspera => Rc::new(|p| sd_poligono(p, &SETA_SC)),
-        Tipo::Texto => Rc::new(move |p| sd_capsula(p, v2(0.5, -8.5), v2(0.5, 8.5), if lente { 3.0 } else { 2.5 })),
+        Tipo::Texto => Rc::new(|p| sd_capsula(p, v2(0.5, -8.5), v2(0.5, 8.5), 2.5)),
         Tipo::Mao => Rc::new(|p| (p - v2(0.5, 0.5)).len() - 8.0),
         Tipo::Espera => Rc::new(|p| ((p - v2(0.5, 0.5)).len() - 7.6).abs() - 2.4),
         Tipo::RedimH => Rc::new(|p| sd_seta_dupla(p - v2(0.5, 0.5)) - 0.8),
@@ -460,7 +460,7 @@ fn partes_vidro(tipo: Tipo, pal: &Paleta, tempo: f32, lente: bool) -> Vec<Parte>
         Tipo::Cruz => Rc::new(|p| sd_cruz(p) - 0.8),
         Tipo::Proibido => Rc::new(sd_proibido),
     };
-    let mut v = vidro_partes(forma, pal, lente);
+    let mut v = vidro_partes(forma, pal, false);
     match tipo {
         Tipo::SetaEspera => v.push(giro(v2(16.5, 19.5), 4.4, 1.1, tempo, &Paleta { preenchimento: [1.0, 1.0, 1.0, 0.9], contorno: [0.0; 4], ..*pal })),
         Tipo::Espera => v.push(giro(v2(0.5, 0.5), 7.6, 1.0, tempo, &Paleta { preenchimento: [1.0, 1.0, 1.0, 0.85], contorno: [0.0; 4], ..*pal })),
@@ -469,10 +469,109 @@ fn partes_vidro(tipo: Tipo, pal: &Paleta, tempo: f32, lente: bool) -> Vec<Parte>
     v
 }
 
+/// Seta dupla da Lente: gorda, de pontas redondas, a haste escorrendo para as pontas.
+fn sd_dupla_lente(p: V2) -> f32 {
+    let haste = sd_capsula(p, v2(-4.6, 0.0), v2(4.6, 0.0), 1.35);
+    let esq = sd_poligono(p, &[v2(-7.6, 0.0), v2(-4.7, -2.7), v2(-4.7, 2.7)]) - 1.1;
+    let dir = sd_poligono(p, &[v2(7.6, 0.0), v2(4.7, 2.7), v2(4.7, -2.7)]) - 1.1;
+    smin(smin(haste, esq, 0.7), dir, 0.7)
+}
+
+fn sd_mover_lente(p: V2) -> f32 {
+    // pontas menores e mais longe do meio, senão as quatro se juntam num losango
+    let braco = |q: V2| {
+        let haste = sd_capsula(q, v2(-5.8, 0.0), v2(5.8, 0.0), 1.1);
+        let esq = sd_poligono(q, &[v2(-8.2, 0.0), v2(-6.0, -1.9), v2(-6.0, 1.9)]) - 0.85;
+        let dir = sd_poligono(q, &[v2(8.2, 0.0), v2(6.0, 1.9), v2(6.0, -1.9)]) - 0.85;
+        haste.min(esq).min(dir)
+    };
+    smin(braco(p), braco(p.girar(-PI / 2.0)), 0.8)
+}
+
+fn sd_mira_lente(p: V2) -> f32 {
+    let r = 1.25;
+    sd_capsula(p, v2(-7.6, 0.0), v2(-3.0, 0.0), r)
+        .min(sd_capsula(p, v2(3.0, 0.0), v2(7.6, 0.0), r))
+        .min(sd_capsula(p, v2(0.0, -7.6), v2(0.0, -3.0), r))
+        .min(sd_capsula(p, v2(0.0, 3.0), v2(0.0, 7.6), r))
+        .min(p.len() - 1.2)
+}
+
+fn sd_proibido_lente(p: V2) -> f32 {
+    smin((p.len() - 6.4).abs() - 1.7, sd_capsula(p, v2(-4.5, -4.5), v2(4.5, 4.5), 1.6), 0.6)
+}
+
+/// A mão da Lente: a mesma mão, menor e mais gorda; a ponta do dedo continua no ponto ativo.
+fn sd_mao_lente(p: V2) -> f32 {
+    let (k, ponta) = (0.74, v2(0.5, 0.0));
+    sd_mao(ponta + (p - ponta) / k) * k - 0.4
+}
+
+/// A luz que gira dentro do anel de vidro, com a cauda sumindo; sem contorno.
+fn giro_lente(centro: V2, raio: f32, meia: f32, tempo: f32) -> Parte {
+    let fase = (tempo * 1.2).fract() * TAU;
+    Parte {
+        sdf: Box::new(move |p: V2| ((p - centro).len() - raio).abs() - meia),
+        preenchimento: [1.0, 1.0, 1.0, 0.92],
+        contorno: [0.0; 4],
+        largura: 0.0,
+        alfa: Some(Box::new(move |p: V2| {
+            let q = p - centro;
+            let g = ((q.y.atan2(q.x) - fase) / TAU).rem_euclid(1.0);
+            g * g * g
+        })),
+        sombra: false,
+        cor: None,
+        vidro: false,
+    }
+}
+
+/// Todas as formas da Lente saem da mesma receita da seta: gordas, redondas e desenhadas na
+/// mesma escala dela, para o vidro (fio, luz e sombra) ter a mesma espessura em todas.
+fn partes_lente(tipo: Tipo, pal: &Paleta, tempo: f32) -> Vec<Parte> {
+    let c = v2(0.5, 0.5);
+    let r = 2.6;
+    let (dentro, desloc) = arredondar(&SETA_SC, r);
+    let seta = Rc::new(move |p: V2| sd_poligono(p - desloc, &dentro) - r);
+    let anel_abrindo = v2(15.6, 19.2);
+    let (forma, k): (Rc<dyn Fn(V2) -> f32>, f32) = match tipo {
+        Tipo::Seta => (seta, 1.0),
+        Tipo::SetaEspera => (Rc::new(move |p| seta(p).min(((p - anel_abrindo).len() - 3.4).abs() - 1.25)), 0.8),
+        Tipo::Texto => (Rc::new(move |p| sd_capsula(p - c, v2(0.0, -6.2), v2(0.0, 6.2), 1.9)), 0.55),
+        Tipo::Mao => (Rc::new(sd_mao_lente), 0.5),
+        Tipo::Espera => (Rc::new(move |p| ((p - c).len() - 6.0).abs() - 2.1), 0.7),
+        Tipo::RedimH => (Rc::new(move |p| sd_dupla_lente(p - c)), 0.55),
+        Tipo::RedimV => (Rc::new(move |p| sd_dupla_lente((p - c).girar(-PI / 2.0))), 0.55),
+        Tipo::RedimNwse => (Rc::new(move |p| sd_dupla_lente((p - c).girar(-PI / 4.0))), 0.55),
+        Tipo::RedimNesw => (Rc::new(move |p| sd_dupla_lente((p - c).girar(PI / 4.0))), 0.55),
+        Tipo::Mover => (Rc::new(move |p| sd_mover_lente(p - c)), 0.55),
+        Tipo::Cruz => (Rc::new(move |p| sd_mira_lente(p - c)), 0.5),
+        Tipo::Proibido => (Rc::new(move |p| sd_proibido_lente(p - c)), 0.55),
+    };
+    let mut v = vidro_partes_k(forma.clone(), pal, true, k);
+    match tipo {
+        Tipo::SetaEspera => v.push(giro_lente(anel_abrindo, 3.4, 0.7, tempo)),
+        Tipo::Espera => v.push(giro_lente(c, 6.0, 1.05, tempo)),
+        // o vidro levemente vermelho diz "não" sem sair do tema
+        Tipo::Proibido => v.push(Parte {
+            sdf: Box::new(move |p| forma(p)),
+            preenchimento: [0.95, 0.16, 0.18, 0.34],
+            contorno: [0.0; 4],
+            largura: 0.0,
+            alfa: None,
+            sombra: false,
+            cor: None,
+            vidro: false,
+        }),
+        _ => {}
+    }
+    v
+}
+
 fn partes(tipo: Tipo, vet: &Vetorial, tempo: f32) -> Vec<Parte> {
     let pal = vet.pal;
     if vet.forma.vidro() {
-        return partes_vidro(tipo, &pal, tempo, vet.forma == Forma::Lente);
+        return if vet.forma == Forma::Lente { partes_lente(tipo, &pal, tempo) } else { partes_vidro(tipo, &pal, tempo) };
     }
     let circulo = vet.forma == Forma::Circulo;
     // formas centradas ocupam de -10 a 10; a seta, de 0 a 20

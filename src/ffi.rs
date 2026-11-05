@@ -374,6 +374,7 @@ extern "system" {
         flags: u32,
     ) -> BOOL;
     pub fn SetWindowPos(h: HWND, after: HWND, x: i32, y: i32, cx: i32, cy: i32, flags: u32) -> BOOL;
+    pub fn SetWindowRgn(h: HWND, regiao: HANDLE, redesenhar: BOOL) -> i32;
     pub fn ShowWindow(h: HWND, cmd: i32) -> BOOL;
     pub fn IsWindowVisible(h: HWND) -> BOOL;
     pub fn GetWindow(h: HWND, cmd: u32) -> HWND;
@@ -410,6 +411,7 @@ extern "system" {
 
 #[link(name = "gdi32", kind = "raw-dylib")]
 extern "system" {
+    pub fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> HANDLE;
     pub fn CreateCompatibleDC(dc: HANDLE) -> HANDLE;
     pub fn CreateDCW(driver: *const u16, device: *const u16, port: *const u16, dm: *const c_void) -> HANDLE;
     pub fn DeleteDC(dc: HANDLE) -> BOOL;

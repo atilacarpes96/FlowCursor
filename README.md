@@ -39,7 +39,7 @@ A tela grava no mesmo arquivo.
 | chave | o que faz |
 |---|---|
 | `tema` | Desenhados pelo FlowCursor: `macos`, `claro`, `bibata`, `bibata_gelo`, `ipados`, `aurora`, `cristal`, `lente` (os dois de vidro), `cores` (com `cor_preenchimento` e `cor_contorno` em RRGGBB). Do Windows: `windows` (os originais) ou `esquema:<nome>`. Seus: `pasta:<nome>`, uma pasta dentro de `cursores\` com .cur, .ani ou .png (ou um pacote com install.inf) |
-| `tamanho` | 1.0 = tamanho do ponteiro padrão. Na `lente`, a seta é desenhada 1,85x maior e só ela cresce acima de 1.0; as outras formas e a pílula dos botões param no tamanho de 1.0 |
+| `tamanho` | 1.0 = tamanho do ponteiro padrão. Na `lente`, todas as formas são desenhadas na escala 1,85x e só a seta cresce acima de 1.0; as outras formas e a pílula dos botões param no tamanho de 1.0 |
 | `grudar_botoes` | temas de vidro: o ponteiro vira uma pílula do tamanho do botão embaixo dele |
 | `responsividade` | quanto o desenho cola no ponteiro real (100 = sem mola) |
 | `elasticidade` | quanto passa do ponto e volta |
@@ -88,6 +88,9 @@ verdade do Windows, que aparece mesmo com o painel sem foco):
   recuam um pouco), com o título embaixo; a prévia não amplia além do tamanho real da janela;
 - a seleção é um anel na cor de destaque do Windows, numa camada própria por cima das
   miniaturas (para as vizinhas não o cobrirem);
+- com o tema Lente líquida, o painel segue o ponteiro: cantos grandes (a janela é recortada, porque
+  o Windows só arredonda 8 px) e cartões, busca e seleção com a mesma borda de vidro. O fundo
+  continua sendo o desfoque do Windows, sem a refração do ponteiro;
 - não precisa segurar o Alt: soltou com o painel na tela e sem ter escolhido pelo Tab, ele fica
   aberto. Aí dá para usar o mouse, as setas ou digitar a busca. Enter ou clique abre, e Esc, clique
   fora, a tecla Windows ou 30 s parado fecham;

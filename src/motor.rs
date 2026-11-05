@@ -91,6 +91,8 @@ pub struct Motor {
     caixa: [f32; 4],
     pilula: Sprite,
     chave_pilula: (i32, i32, u64, u16),
+    /// Onde o mouse está de verdade (sem a mola), para marcar o ponto dentro da pílula.
+    mouse: V2,
     ultimo: Option<(i64, i64, u64)>,
     forcar: bool,
     camada: Vec<Cor>,
@@ -124,6 +126,7 @@ impl Motor {
             caixa: [0.0; 4],
             pilula: Sprite::novo(),
             chave_pilula: (0, 0, 0, 0),
+            mouse: V2::default(),
             ultimo: None,
             forcar: true,
             camada: Vec::new(),
@@ -196,6 +199,7 @@ impl Motor {
         let dt = ((t - self.t_ant) as f32).clamp(0.0, 0.05);
         self.t_ant = t;
         let pos_ant = self.pos;
+        self.mouse = alvo;
         if dt > 0.0 {
             self.fisica(dt, alvo, cfg);
         }
@@ -242,8 +246,8 @@ impl Motor {
         // que acompanha um pouco o mouse; fora, a pílula volta a ser o ponteiro.
         let botao = if tema.usa_fundo() && cfg.grudar_botoes { crate::alvo::sob(alvo.x as i32, alvo.y as i32) } else { None };
         let lente = tema.vetor.forma == crate::formas::Forma::Lente;
-        // na Lente, as outras formas e a pílula param no tamanho de 100%
-        let s = escala_base * fator_lente(lente, Tipo::Mao, cfg.tamanho);
+        // na Lente, a pílula para no tamanho de 100%
+        let s = escala_base * fator_pilula(lente, cfg.tamanho);
         let s_seta = escala_base * fator_lente(lente, Tipo::Seta, cfg.tamanho);
         let alvo_caixa = match botao {
             Some(r) => {
@@ -421,6 +425,9 @@ impl Motor {
             if let Some(f) = fundo {
                 vidro_por_baixo(p, 0, 0, (ox + ix, oy + iy, p.w, p.h), f, lente, 1.03, &mut camada_pilula);
             }
+            // a pílula ocupa o botão inteiro: o brilho e o ponto mostram onde o mouse está
+            let s = escala_base * fator_pilula(lente, cfg.tamanho);
+            marcar_mouse(&mut camada_pilula, p.w, p.h, self.mouse.x - (ox + ix) as f32, self.mouse.y - (oy + iy) as f32, s);
             for j in 0..p.h {
                 for i in 0..p.w {
                     let (x, y) = (ix + i as i32, iy + j as i32);
@@ -551,9 +558,9 @@ impl Motor {
     }
 }
 
-/// Lente líquida: a seta é desenhada 1,85x maior (o 100% dela é o antigo 185%, que era o
-/// tamanho usável) e só ela cresce acima de 100%; texto, mão, espera e a pílula dos botões
-/// já são grandes e param no tamanho de 100%.
+/// Lente líquida: todas as formas são desenhadas na escala 1,85x (o 100% é o antigo 185%,
+/// que era o tamanho usável), para o vidro ter a mesma espessura nelas. Só a seta cresce
+/// acima de 100%; as outras param no tamanho de 100%.
 pub const LENTE_SETA: f32 = 1.85;
 pub fn fator_lente(lente: bool, tipo: Tipo, tamanho: f32) -> f32 {
     if !lente {
@@ -561,7 +568,48 @@ pub fn fator_lente(lente: bool, tipo: Tipo, tamanho: f32) -> f32 {
     } else if matches!(tipo, Tipo::Seta | Tipo::SetaEspera) {
         LENTE_SETA
     } else {
-        tamanho.min(1.0) / tamanho.max(0.01)
+        LENTE_SETA * fator_pilula(lente, tamanho)
+    }
+}
+
+/// A pílula dos botões acompanha o botão e também para no tamanho de 100%.
+fn fator_pilula(lente: bool, tamanho: f32) -> f32 {
+    if lente { tamanho.min(1.0) / tamanho.max(0.01) } else { 1.0 }
+}
+
+/// Marca na pílula (`w` x `h`, já com a tela de trás) onde o mouse está: uma mancha de luz
+/// difusa, sem contorno, para a pílula continuar sendo o ponteiro. Em fundo claro a luz branca
+/// não apareceria, então ali ela vira uma sombra suave. Só pinta onde já há pílula.
+fn marcar_mouse(px: &mut [Cor], w: usize, h: usize, mx: f32, my: f32, s: f32) {
+    let (brilho, miolo) = (26.0 * s, 8.0 * s);
+    let (x0, x1) = (((mx - brilho).floor().max(0.0)) as usize, ((mx + brilho).ceil().max(0.0) as usize).min(w));
+    let (y0, y1) = (((my - brilho).floor().max(0.0)) as usize, ((my + brilho).ceil().max(0.0) as usize).min(h));
+    // a claridade média em volta do mouse decide: um valor só, para o texto do botão não manchar
+    let (mut soma, mut n) = (0.0, 0.0);
+    for j in y0..y1 {
+        for i in x0..x1 {
+            let c = px[j * w + i];
+            if c[3] > 0.5 {
+                soma += (0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]) / c[3];
+                n += 1.0;
+            }
+        }
+    }
+    let claro = smoothstep(0.55, 0.85, if n > 0.0 { soma / n } else { 0.0 });
+    let (cor, forca) = (1.0 - 0.45 * claro, 1.0 - 0.45 * claro);
+    for j in y0..y1 {
+        for i in x0..x1 {
+            let d = (v2(i as f32 + 0.5, j as f32 + 0.5) - v2(mx, my)).len();
+            let c = &mut px[j * w + i];
+            let a = c[3].min(1.0);
+            if d >= brilho || a <= 0.0 {
+                continue;
+            }
+            let g = (0.6 * (-(d / miolo).powi(2)).exp() + 0.16 * (1.0 - smoothstep(0.0, brilho, d))) * forca;
+            for v in c.iter_mut().take(3) {
+                *v += (cor * a - *v) * g;
+            }
+        }
     }
 }
 
@@ -658,6 +706,111 @@ fn sobrepor(sp: &Sprite, q: V2, alfa: f32, dest: &mut [Cor], w: usize, h: usize)
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    /// Fundo escuro clareia no mouse, fundo claro escurece, e nada pinta fora da pílula.
+    #[test]
+    fn marca_o_mouse_so_dentro_da_pilula() {
+        let (w, h) = (80, 40);
+        let mut px = vec![[0.2, 0.2, 0.2, 1.0]; w * h];
+        px[0] = [0.0; 4];
+        marcar_mouse(&mut px, w, h, 40.5, 20.5, 1.0);
+        assert!(px[20 * w + 40][0] > px[20 * w + 50][0] && px[20 * w + 50][0] > 0.2, "luz cai aos poucos");
+        assert_eq!(px[0], [0.0; 4], "fora da pílula continua vazio");
+        let mut px = vec![[0.95, 0.95, 0.95, 1.0]; w * h];
+        marcar_mouse(&mut px, w, h, 40.5, 20.5, 1.0);
+        assert!(px[20 * w + 40][0] < 0.9, "em fundo claro vira sombra");
+        // mouse fora da imagem não pode estourar os índices
+        marcar_mouse(&mut px, w, h, -500.0, 900.0, 1.0);
+    }
+
+    /// As 12 formas da Lente sobre um pedaço real da tela, no tamanho de 100%, ampliadas 3x.
+    /// Uso: FLOWCURSOR_TESTE="x,y,pasta" cargo test --release formas_lente -- --ignored
+    #[test]
+    #[ignore]
+    fn formas_lente() {
+        let arg = std::env::var("FLOWCURSOR_TESTE").expect("FLOWCURSOR_TESTE=x,y,pasta");
+        let partes: Vec<&str> = arg.splitn(3, ',').collect();
+        let (x0, y0): (i32, i32) = (partes[0].parse().unwrap(), partes[1].parse().unwrap());
+        let f = crate::captura::de_tela(x0, y0);
+        let cfg = Config { tema: "lente".into(), ..Default::default() };
+        let tema = temas::carregar("lente", &cfg);
+        const C: usize = 96;
+        const Z: usize = 3;
+        let (w, h) = (C * 4, C * 3);
+        let mut tela = vec![[0.0f32; 3]; w * h];
+        for j in 0..h {
+            for i in 0..w {
+                tela[j * w + i] = f.em(x0 + i as i32, y0 + j as i32).map_or([0.0; 3], |c| c.0);
+            }
+        }
+        let tipos = [Tipo::Seta, Tipo::Mao, Tipo::Texto, Tipo::Espera, Tipo::SetaEspera, Tipo::Cruz, Tipo::Proibido, Tipo::Mover, Tipo::RedimH, Tipo::RedimV, Tipo::RedimNwse, Tipo::RedimNesw];
+        for (n, &tipo) in tipos.iter().enumerate() {
+            let mut sp = Sprite::novo();
+            let escala = fator_lente(true, tipo, 1.0);
+            sp.renderizar(&[Camada { tipo, alfa: 1.0, escala }], &tema, 50.0, 0.35);
+            let (cx, cy) = ((n % 4 * C) as i32 + 40, (n / 4 * C) as i32 + 40);
+            let (ox, oy) = (x0 + cx - sp.ox, y0 + cy - sp.oy);
+            let mut dest = sp.px.clone();
+            vidro_por_baixo(&sp, 0, 0, (ox, oy, sp.w, sp.h), &f, true, 1.12, &mut dest);
+            for j in 0..sp.h {
+                for i in 0..sp.w {
+                    let (x, y) = (cx - sp.ox + i as i32, cy - sp.oy + j as i32);
+                    if x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h {
+                        let d = dest[j * sp.w + i];
+                        let t = &mut tela[y as usize * w + x as usize];
+                        for k in 0..3 {
+                            t[k] = d[k] + t[k] * (1.0 - d[3].min(1.0));
+                        }
+                    }
+                }
+            }
+        }
+        let mut out = vec![255u8; w * Z * h * Z * 4];
+        for j in 0..h * Z {
+            for i in 0..w * Z {
+                let c = tela[(j / Z) * w + i / Z];
+                let q = (j * w * Z + i) * 4;
+                for k in 0..3 {
+                    out[q + k] = (c[k].clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                }
+            }
+        }
+        crate::png::salvar(&std::path::Path::new(partes[2]).join("formas_lente.png"), w * Z, h * Z, &out).unwrap();
+    }
+
+    /// Pílula com a marca do mouse em fundo claro e escuro, ampliada 3x.
+    /// Uso: FLOWCURSOR_TESTE="pasta" cargo test --release pilula_com_mouse -- --ignored
+    #[test]
+    #[ignore]
+    fn pilula_com_mouse() {
+        let pasta = std::env::var("FLOWCURSOR_TESTE").expect("FLOWCURSOR_TESTE=pasta");
+        let cfg = Config { tema: "lente".into(), ..Default::default() };
+        let tema = temas::carregar("lente", &cfg);
+        let (s, pw, ph) = (1.5f32, 340.0f32, 60.0f32);
+        let mut sp = Sprite::novo();
+        sp.renderizar_pilula(pw, ph, s, &tema, 50.0);
+        const Z: usize = 3;
+        let (w, h) = (sp.w * Z, sp.h * 2 * Z);
+        let mut out = vec![255u8; w * h * 4];
+        for (n, fundo) in [[0.93f32, 0.92, 0.90], [0.16, 0.16, 0.19]].iter().enumerate() {
+            let mut c = sp.px.clone();
+            for (i, d) in c.iter_mut().enumerate() {
+                let cob = sp.vidro[i][0];
+                *d = sobre(*d, [fundo[0] * cob, fundo[1] * cob, fundo[2] * cob, cob.min(1.0)]);
+            }
+            marcar_mouse(&mut c, sp.w, sp.h, sp.ox as f32 + pw - 34.0, sp.oy as f32 + ph / 2.0, s);
+            for j in 0..sp.h * Z {
+                for i in 0..w {
+                    let d = c[(j / Z) * sp.w + i / Z];
+                    let q = ((j + n * sp.h * Z) * w + i) * 4;
+                    for k in 0..3 {
+                        out[q + k] = ((d[k] + fundo[k] * (1.0 - d[3].min(1.0))).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                    }
+                }
+            }
+        }
+        crate::png::salvar(&std::path::Path::new(&pasta).join("pilula_mouse.png"), w, h, &out).unwrap();
+    }
 
     /// Antes e depois da Lente líquida sobre um pedaço real da tela, ampliado 4x para ver os
     /// pixels. Uso: FLOWCURSOR_TESTE="x,y,pasta" cargo test --release lente_antes_depois -- --ignored

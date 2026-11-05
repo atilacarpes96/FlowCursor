@@ -252,6 +252,16 @@ impl Tela<'_> {
         self.forma(r, raio, 1.0, cor, move |d, fy| (0.5 - d).clamp(0.0, 1.0) * (1.0 - smoothstep(0.0, ate, fy)));
     }
 
+    /// Vidro da Lente líquida nas bordas de `r`, a mesma receita do ponteiro: luz por dentro no
+    /// topo, sombra por dentro embaixo, fio branco e um fio escuro por fora.
+    fn vidro(&mut self, r: Ret, raio: f32, s: f32) {
+        let faixa = move |d: f32| if d < 0.0 { 1.0 - smoothstep(0.0, 6.0 * s, -d) } else { 0.0 };
+        self.forma(r, raio, 1.0, [1.0, 1.0, 1.0, 0.5], move |d, fy| faixa(d) * (1.0 - fy).powf(1.4));
+        self.forma(r, raio, 1.0, [0.08, 0.08, 0.2, 0.2], move |d, fy| faixa(d) * fy * fy);
+        self.contornar_iluminado(r.crescer(-0.5 * s), raio, 1.4 * s, [1.0, 1.0, 1.0, 0.95], 0.35);
+        self.contornar(r.crescer(1.0 * s), raio + 1.0 * s, 0.8 * s, [0.08, 0.08, 0.16, 0.3]);
+    }
+
     /// Sombra só do lado de fora de `r`: esta camada fica por cima da miniatura e não pode escurecê-la.
     fn sombra_externa(&mut self, r: Ret, raio: f32, desfoque: f32, desce: f32, cor: [f32; 4]) {
         let sombra = Ret { y: r.y + desce, ..r };
@@ -507,6 +517,10 @@ struct Tema {
     texto2: u32,
     texto3: u32,
     destaque: [f32; 4],
+    /// Tema Lente líquida: cantos grandes e bordas de vidro como as do ponteiro.
+    lente: bool,
+    raio_painel: f32,
+    raio_cartao: f32,
 }
 
 /// Os ajustes chegam de 0 a 1. `transparencia`: quanto do fundo aparece (o véu escuro
@@ -514,7 +528,8 @@ struct Tema {
 /// `fosco`: até VIDRO_LIMPO é vidro limpo, sem desfoque; depois desfoque e, a partir de
 /// VIDRO_ACRILICO, acrílico com um véu branco que deixa o painel leitoso no fim.
 /// `cor`: tom do ícone no topo dos cartões (0,5 é o padrão).
-fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f32) -> Tema {
+fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f32, lente: bool) -> Tema {
+    let (raio_painel, raio_cartao) = if lente { (26.0, 22.0) } else { (8.0, 16.0) };
     let d = [destaque[0], destaque[1], destaque[2], 1.0];
     let cor = cor * 2.0;
     let fosco = fosco.clamp(0.0, 1.0);
@@ -552,6 +567,9 @@ fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f
             texto2: 0xD9E6E6EB,
             texto3: 0x8CE6E6EB,
             destaque: d,
+            lente,
+            raio_painel,
+            raio_cartao,
         }
     } else {
         Tema {
@@ -571,6 +589,9 @@ fn tema(escuro: bool, destaque: [f32; 3], transparencia: f32, fosco: f32, cor: f
             texto2: 0xD92C2C30,
             texto3: 0x993C3C43,
             destaque: d,
+            lente,
+            raio_painel,
+            raio_cartao,
         }
     }
 }
@@ -985,7 +1006,7 @@ impl Painel {
             DwmSetWindowAttribute(hwnd, DWMWA_TRANSITIONS_FORCEDISABLED, (&sim as *const i32).cast(), 4);
             DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&redondo as *const i32).cast(), 4);
             let c = crate::laco::config_atual();
-            let tema = tema(escuro, cor_destaque(), c.alttab_transparencia / 100.0, c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
+            let tema = tema(escuro, cor_destaque(), c.alttab_transparencia / 100.0, c.alttab_fosco / 100.0, c.alttab_cor / 100.0, c.tema == "lente");
             aplicar_vidro(hwnd, tema.acento, tema.estado_vidro);
             Some(Painel {
                 hwnd,
@@ -1053,6 +1074,20 @@ impl Painel {
         }
     }
 
+    /// O Windows só arredonda a janela em 8 px; a Lente pede cantos maiores, então ela é recortada.
+    unsafe fn recortar_cantos(&self, w: i32, h: i32) {
+        let regiao = if self.tema.lente {
+            let d = (2.0 * self.tema.raio_painel * self.escala).round() as i32;
+            CreateRoundRectRgn(0, 0, w + 1, h + 1, d, d)
+        } else {
+            0
+        };
+        // o canto automático do Windows 11 passa por cima do recorte
+        let canto: i32 = if self.tema.lente { 1 } else { DWMWCP_ROUND };
+        DwmSetWindowAttribute(self.hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, (&canto as *const i32).cast(), 4);
+        SetWindowRgn(self.hwnd, regiao, 1);
+    }
+
     fn garantir_dib(&mut self, w: usize, h: usize) -> bool {
         if w == self.w && h == self.h && !self.bits.is_null() {
             return true;
@@ -1095,7 +1130,7 @@ impl Painel {
         self.escala = crate::sistema::escala_dpi(pt);
         let escuro = tema_escuro();
         let c = crate::laco::config_atual();
-        self.tema = tema(escuro, cor_destaque(), c.alttab_transparencia / 100.0, c.alttab_fosco / 100.0, c.alttab_cor / 100.0);
+        self.tema = tema(escuro, cor_destaque(), c.alttab_transparencia / 100.0, c.alttab_fosco / 100.0, c.alttab_cor / 100.0, c.tema == "lente");
         self.pref_tamanho = c.alttab_tamanho / 100.0;
         self.pref_painel = c.alttab_painel / 100.0;
         unsafe { DwmSetWindowAttribute(self.hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, (&(escuro as i32) as *const i32).cast(), 4) };
@@ -1306,6 +1341,7 @@ impl Painel {
             self.pos = (x, y);
             unsafe {
                 SetWindowPos(self.hwnd, HWND_TOPMOST, x as i32, y as i32, pw as i32, ph as i32, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                self.recortar_cantos(pw as i32, ph as i32);
             }
             self.lado_inicial = lado;
         }
@@ -1354,6 +1390,7 @@ impl Painel {
             self.pos = (x, y);
             unsafe {
                 SetWindowPos(self.hwnd, HWND_TOPMOST, x as i32, y as i32, pw as i32, ph as i32, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                self.recortar_cantos(pw as i32, ph as i32);
             }
         } else {
             largura_coluna = largura_coluna.min((self.w as f32 - 2.0 * margem - (colunas - 1) as f32 * entre_colunas) / colunas as f32);
@@ -1461,11 +1498,20 @@ impl Painel {
         {
             let mut tela = Tela { px: &mut self.base, w, h, recorte: todo };
             // vidro: brilho que desce do topo e borda iluminada
-            tela.brilho(todo, 8.0 * s, tema.brilho, 0.4);
-            tela.contornar_iluminado(todo.crescer(-0.5), 8.0 * s, 1.0 * s, tema.borda, 0.25);
+            let raio_painel = tema.raio_painel * s;
+            tela.brilho(todo, raio_painel, tema.brilho, 0.4);
+            if tema.lente {
+                tela.vidro(todo.crescer(-0.5), raio_painel, s);
+            } else {
+                tela.contornar_iluminado(todo.crescer(-0.5), raio_painel, 1.0 * s, tema.borda, 0.25);
+            }
             // busca
             tela.preencher(self.busca, self.busca.h / 2.0, tema.cartao);
-            tela.contornar_iluminado(self.busca, self.busca.h / 2.0, 1.0 * s, tema.cartao_borda, 0.5);
+            if tema.lente {
+                tela.vidro(self.busca, self.busca.h / 2.0, s);
+            } else {
+                tela.contornar_iluminado(self.busca, self.busca.h / 2.0, 1.0 * s, tema.cartao_borda, 0.5);
+            }
             let n_vis = self.itens.iter().filter(|i| i.visivel).count();
             let (texto_busca, cor_busca) = if self.filtro.is_empty() {
                 let dica = if self.fixo { "Digite para buscar   ·   Enter abre   ·   Esc fecha" } else { "Digite para buscar" };
@@ -1476,13 +1522,17 @@ impl Painel {
             rotulos.push(Rotulo { texto: format!("⌕  {texto_busca}"), r: self.busca.crescer(-10.0 * s), tam: 14.0 * s, semi: false, cor: cor_busca, alinhar: STRING_ALIGN_CENTER, sombra: 0 });
 
             for (g, cor) in self.grupos.iter().zip(&cores) {
-                let raio = 16.0 * s;
+                let raio = tema.raio_cartao * s;
                 tela.preencher(g.ret, raio, tema.cartao);
                 // tom do ícone só no topo do cartão, sumindo até o fim do cabeçalho
                 if let Some(c) = cor.filter(|_| tema.tinta_cabecalho > 0.005) {
                     tela.brilho(g.ret, raio, [c[0], c[1], c[2], tema.tinta_cabecalho], (CABECALHO * s / g.ret.h).min(0.6));
                 }
-                tela.contornar_iluminado(g.ret, raio, 1.0 * s, tema.cartao_borda, 0.45);
+                if tema.lente {
+                    tela.vidro(g.ret, raio, s);
+                } else {
+                    tela.contornar_iluminado(g.ret, raio, 1.0 * s, tema.cartao_borda, 0.45);
+                }
                 let lado = 30.0 * s;
                 let (xi, yc) = (g.ret.x + 14.0 * s, g.ret.y + CABECALHO * s / 2.0 + 1.0 * s);
                 tela.icone(g.icone, xi, yc - lado / 2.0, lado);
@@ -1822,8 +1872,13 @@ impl Painel {
                     // faixa cheia na cor de destaque, com a linha redesenhada em branco por cima
                     let raio = self.raio_lista();
                     tela.sombra_externa(an, raio, 8.0 * s, 2.0 * s, [d[0], d[1], d[2], 0.30]);
-                    tela.preencher(an, raio, [d[0], d[1], d[2], 0.92]);
-                    tela.contornar_iluminado(an.crescer(-0.5), raio, 1.0 * s, [1.0, 1.0, 1.0, 0.35], 0.0);
+                    if self.tema.lente {
+                        tela.preencher(an, raio, [d[0], d[1], d[2], 0.62]);
+                        tela.vidro(an, raio, s);
+                    } else {
+                        tela.preencher(an, raio, [d[0], d[1], d[2], 0.92]);
+                        tela.contornar_iluminado(an.crescer(-0.5), raio, 1.0 * s, [1.0, 1.0, 1.0, 0.35], 0.0);
+                    }
                     if self.itens.get(self.sel).is_some_and(|i| i.visivel) {
                         // o título termina antes do botão de fechar
                         let curta = Ret { w: an.w - botao.map_or(0.0, |(_, b, _, _)| b.w + 6.0 * s), ..an };
@@ -1832,8 +1887,16 @@ impl Painel {
                         rotulos.extend(textos);
                     }
                 } else {
-                    tela.sombra_externa(an, 9.0 * s, 9.0 * s, 0.0, [d[0], d[1], d[2], 0.28]);
-                    tela.contornar(an, 9.0 * s, 2.25 * s, d);
+                    if self.tema.lente {
+                        // anel de vidro grosso, com a cor de destaque bem leve dentro dele
+                        tela.sombra_externa(an, 12.0 * s, 10.0 * s, 2.0 * s, [0.0, 0.0, 0.0, 0.32]);
+                        tela.contornar(an.crescer(-2.0 * s), 11.0 * s, 4.5 * s, [d[0], d[1], d[2], 0.5]);
+                        tela.contornar_iluminado(an.crescer(0.25 * s), 12.0 * s, 1.5 * s, [1.0, 1.0, 1.0, 0.95], 0.4);
+                        tela.contornar(an.crescer(-4.25 * s), 9.0 * s, 1.0 * s, [1.0, 1.0, 1.0, 0.55]);
+                    } else {
+                        tela.sombra_externa(an, 9.0 * s, 9.0 * s, 0.0, [d[0], d[1], d[2], 0.28]);
+                        tela.contornar(an, 9.0 * s, 2.25 * s, d);
+                    }
                 }
             }
             if let Some((_, b, a, redondo)) = botao {

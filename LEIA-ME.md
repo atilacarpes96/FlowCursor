@@ -43,7 +43,8 @@ No topo da tela de ajustes ficam sempre à vista os botões **Procurar atualiza�
 
 Pela tela de ajustes, as mudanças valem na hora e há uma área de teste com todos os ponteiros:
 - **Tema:** macOS, Claro, Bibata, Bibata Gelo, iPadOS, Aurora, os de vidro (Cristal e Lente líquida) ou suas cores; os cursores originais do Windows (e os esquemas instalados nele); ou temas seus, numa pasta dentro de `cursores` com arquivos .cur, .ani ou .png (o botão *Abrir pasta* mostra onde e explica os nomes).
-- **Tamanho**. Na Lente líquida, a seta já vem bem maior (o 100% dela é o antigo 185%) e, acima de 100%, só a seta cresce; texto, mão e a pílula dos botões ficam no tamanho de 100%.
+- **Grudar nos botões:** nos temas de vidro, o ponteiro vira uma pílula do tamanho do botão. Uma mancha de luz difusa dentro dela (sombra suave em fundo claro) mostra onde o mouse está, para acertar botões pequenos dentro de outro botão, como o X de uma aba.
+- **Tamanho**. Na Lente líquida, todas as formas têm o mesmo vidro gordo da seta (o 100% é o antigo 185%) e, acima de 100%, só a seta cresce; as outras formas e a pílula dos botões ficam no tamanho de 100%.
 - **Mola:**
   - responsividade: quanto o desenho gruda no ponteiro;
   - elasticidade: quanto passa do ponto e volta;
@@ -51,7 +52,7 @@ Pela tela de ajustes, as mudanças valem na hora e há uma área de teste com to
 - **Borrão** e **rastro:** comprimento, intensidade e a velocidade em que o rastro aparece.
 - **Efeito de clique:** o ponteiro encolhe e solta uma onda.
 - **Desativar em tela cheia:** jogos e vídeos usam o ponteiro normal.
-- **Alt+Tab:** vidro, cor dos cartões, tamanho das miniaturas, tamanho do painel e o botão **Ver o Alt+Tab** para testar.
+- **Alt+Tab:** vidro, cor dos cartões, tamanho das miniaturas, tamanho do painel e o botão **Ver o Alt+Tab** para testar. Com o tema Lente líquida, o painel ganha cantos grandes e bordas de vidro como as do ponteiro.
 
 Tudo isso fica em `flowcursor.ini`, nesta pasta. Dá para editar à mão; salvou, vale na hora.
 
