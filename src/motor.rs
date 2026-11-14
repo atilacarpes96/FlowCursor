@@ -411,7 +411,7 @@ impl Motor {
         if let Some(f) = fundo {
             let q = self.pos - origem;
             let (ix, iy) = ((q.x - self.sprite.ox as f32).round() as i32, (q.y - self.sprite.oy as f32).round() as i32);
-            vidro_por_baixo(&self.sprite, ix, iy, (ox, oy, w, h), f, lente, 1.12, &mut self.acum);
+            vidro_por_baixo(&self.sprite, ix, iy, (ox, oy, w, h), f, lente, 1.12, f32::INFINITY, &mut self.acum);
         }
 
         // Pílula do ímã, por baixo do ponteiro (que some enquanto ela aparece).
@@ -423,7 +423,10 @@ impl Motor {
                 *c = p.px[i];
             }
             if let Some(f) = fundo {
-                vidro_por_baixo(p, 0, 0, (ox + ix, oy + iy, p.w, p.h), f, lente, 1.03, &mut camada_pilula);
+                // a curva da borda vai até a metade do lado menor: numa pílula comprida as
+                // pontas entortam como as de uma pílula curta
+                let curva = self.caixa[2].min(self.caixa[3]) / 2.0;
+                vidro_por_baixo(p, 0, 0, (ox + ix, oy + iy, p.w, p.h), f, lente, 1.03, curva, &mut camada_pilula);
             }
             // a pílula ocupa o botão inteiro: o brilho e o ponto mostram onde o mouse está
             let s = escala_base * fator_pilula(lente, cfg.tamanho);
@@ -614,9 +617,11 @@ fn marcar_mouse(px: &mut [Cor], w: usize, h: usize, mx: f32, my: f32, s: f32) {
 }
 
 /// Põe a tela de trás por baixo do vidro do sprite, que está em (ix, iy) no destino.
-/// `area` é (x, y, largura, altura) do destino na tela.
+/// `area` é (x, y, largura, altura) do destino na tela. `curva` limita, em pixels de
+/// distância do centro, quanto a borda da Lente puxa a imagem: numa pílula comprida a
+/// puxada proporcional à distância trazia para a ponta a imagem de ~100 px para dentro.
 #[allow(clippy::too_many_arguments)]
-fn vidro_por_baixo(sp: &Sprite, ix: i32, iy: i32, area: (i32, i32, usize, usize), f: &crate::captura::Fundo, lente: bool, zoom: f32, dest: &mut [Cor]) {
+fn vidro_por_baixo(sp: &Sprite, ix: i32, iy: i32, area: (i32, i32, usize, usize), f: &crate::captura::Fundo, lente: bool, zoom: f32, curva: f32, dest: &mut [Cor]) {
     let (ox, oy, w, h) = area;
     let centro = v2(ox as f32 + ix as f32 + sp.centro.x, oy as f32 + iy as f32 + sp.centro.y);
     for j in 0..sp.h {
@@ -631,7 +636,11 @@ fn vidro_por_baixo(sp: &Sprite, ix: i32, iy: i32, area: (i32, i32, usize, usize)
                 // entorta a imagem, como vidro grosso. A amostra é bicúbica, sem degraus.
                 let p = v2((ox + x) as f32 + 0.5, (oy + y) as f32 + 0.5);
                 let z = zoom * (1.0 + 0.45 * borda * borda);
-                let o = centro + (p - centro) / z;
+                // o mesmo que centro + d / z até a distância `curva`; além dela a curva da
+                // borda desloca só o que deslocaria a essa distância
+                let d = p - centro;
+                let len = d.len().max(1e-4);
+                let o = centro + d / zoom - d * (len.min(curva) / len) * (1.0 / zoom - 1.0 / z);
                 let Some(n) = f.nitido_suave(o.x, o.y) else { continue };
                 n
             } else {
@@ -751,7 +760,7 @@ mod testes {
             let (cx, cy) = ((n % 4 * C) as i32 + 40, (n / 4 * C) as i32 + 40);
             let (ox, oy) = (x0 + cx - sp.ox, y0 + cy - sp.oy);
             let mut dest = sp.px.clone();
-            vidro_por_baixo(&sp, 0, 0, (ox, oy, sp.w, sp.h), &f, true, 1.12, &mut dest);
+            vidro_por_baixo(&sp, 0, 0, (ox, oy, sp.w, sp.h), &f, true, 1.12, f32::INFINITY, &mut dest);
             for j in 0..sp.h {
                 for i in 0..sp.w {
                     let (x, y) = (cx - sp.ox + i as i32, cy - sp.oy + j as i32);
@@ -812,6 +821,66 @@ mod testes {
         crate::png::salvar(&std::path::Path::new(&pasta).join("pilula_mouse.png"), w, h, &out).unwrap();
     }
 
+    /// Pílula comprida da Lente sobre um pedaço real da tela, ampliada 2x: a tela sem nada,
+    /// a borda antiga (curva proporcional à distância) e a nova (curva limitada).
+    /// Uso: FLOWCURSOR_TESTE="x,y,pasta" cargo test --release pilula_comprida -- --ignored
+    #[test]
+    #[ignore]
+    fn pilula_comprida() {
+        let arg = std::env::var("FLOWCURSOR_TESTE").expect("FLOWCURSOR_TESTE=x,y,pasta");
+        let partes: Vec<&str> = arg.splitn(3, ',').collect();
+        let (x0, y0): (i32, i32) = (partes[0].parse().unwrap(), partes[1].parse().unwrap());
+        let (w, h) = (760usize, 140usize);
+        // x = -1: xadrez com riscos a cada 40 px no lugar da tela (mostra a puxada da borda)
+        let f = if x0 < 0 {
+            let px = (0..w * h)
+                .map(|k| {
+                    let (i, j) = (k % w, k / w);
+                    if i % 40 < 3 { 0x00e0_4040 } else if (i / 10 + j / 10) % 2 == 0 { 0x0050_5050 } else { 0x0020_2020 }
+                })
+                .collect();
+            crate::captura::Fundo::de_pixels(x0, y0, w, h, px)
+        } else {
+            crate::captura::de_tela_area(x0, y0, w, h)
+        };
+        let cfg = Config { tema: "lente".into(), ..Default::default() };
+        let tema = temas::carregar("lente", &cfg);
+        let (pw, ph) = (640.0f32, 36.0f32);
+        let mut sp = Sprite::novo();
+        sp.renderizar_pilula(pw, ph, 1.0, &tema, 50.0);
+        let (ix, iy) = (60 - sp.ox, 92 - sp.oy);
+        const Z: usize = 2;
+        let mut out = vec![0u8; w * Z * h * 3 * Z * 4];
+        for (n, curva) in [None, Some(f32::INFINITY), Some(ph / 2.0 + 4.0)].into_iter().enumerate() {
+            let mut camada = vec![[0.0f32; 4]; w * h];
+            if let Some(curva) = curva {
+                let mut c = sp.px.clone();
+                vidro_por_baixo(&sp, 0, 0, (x0 + ix, y0 + iy, sp.w, sp.h), &f, true, 1.03, curva, &mut c);
+                for j in 0..sp.h {
+                    for i in 0..sp.w {
+                        let (x, y) = (ix + i as i32, iy + j as i32);
+                        if x >= 0 && y >= 0 && (x as usize) < w && (y as usize) < h {
+                            camada[y as usize * w + x as usize] = c[j * sp.w + i];
+                        }
+                    }
+                }
+            }
+            for j in 0..h * Z {
+                for i in 0..w * Z {
+                    let (x, y) = (i / Z, j / Z);
+                    let fundo = f.em(x0 + x as i32, y0 + y as i32).unwrap().0;
+                    let d = camada[y * w + x];
+                    let q = ((j + n * h * Z) * w * Z + i) * 4;
+                    for k in 0..3 {
+                        out[q + k] = ((d[k] + fundo[k] * (1.0 - d[3].min(1.0))).clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
+                    }
+                    out[q + 3] = 255;
+                }
+            }
+        }
+        crate::png::salvar(&std::path::Path::new(partes[2]).join("pilula_comprida.png"), w * Z, h * 3 * Z, &out).unwrap();
+    }
+
     /// Antes e depois da Lente líquida sobre um pedaço real da tela, ampliado 4x para ver os
     /// pixels. Uso: FLOWCURSOR_TESTE="x,y,pasta" cargo test --release lente_antes_depois -- --ignored
     #[test]
@@ -834,7 +903,7 @@ mod testes {
             let (ox, oy) = (hx - sp.ox, hy - sp.oy);
             let mut dest = sp.px.clone();
             if novo {
-                vidro_por_baixo(&sp, 0, 0, (ox, oy, sp.w, sp.h), &f, true, 1.12, &mut dest);
+                vidro_por_baixo(&sp, 0, 0, (ox, oy, sp.w, sp.h), &f, true, 1.12, f32::INFINITY, &mut dest);
             } else {
                 // a lente antiga: amplia 1,4x pegando o pixel mais próximo
                 let centro = v2(ox as f32 + sp.centro.x, oy as f32 + sp.centro.y);

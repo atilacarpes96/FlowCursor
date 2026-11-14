@@ -102,6 +102,8 @@ pub fn executar() {
     let mut sumicos_registrados = 0u32;
     let mut vistas_acima: HashSet<isize> = HashSet::new();
     let mut com_fundo = false;
+    let mut conserto: Option<Instant> = None;
+    let mut consertos = 0u32;
     crate::captura::iniciar(&SAIR);
     crate::alvo::iniciar(&SAIR);
 
@@ -127,6 +129,25 @@ pub fn executar() {
             crate::captura::excluir_da_captura(janela.hwnd(), com_fundo);
             crate::captura::ATIVA.store(com_fundo, Relaxed);
             reg!("vidro: cópia da tela {}", if com_fundo { "ligada" } else { "desligada" });
+        }
+        // A exclusão da captura estragou (a janela saiu preta na cópia): refaz. Se voltar a
+        // estragar logo, a janela é trocada por uma nova.
+        if crate::captura::EXCLUSAO_ESTRAGOU.swap(false, Relaxed) && com_fundo {
+            let agora = Instant::now();
+            let recente = conserto.is_some_and(|t: Instant| agora.duration_since(t) < Duration::from_secs(10));
+            if recente {
+                if let Some(nova) = Overlay::criar() {
+                    janela = nova;
+                }
+            } else {
+                crate::captura::excluir_da_captura(janela.hwnd(), false);
+            }
+            let ok = crate::captura::excluir_da_captura(janela.hwnd(), true);
+            consertos += 1;
+            if consertos <= 30 {
+                reg!("vidro: o ponteiro saiu preto na cópia da tela; {} (ok={ok})", if recente { "janela do desenho refeita" } else { "exclusão da captura refeita" });
+            }
+            conserto = Some(agora);
         }
 
         // Pausado, tela bloqueada, menu Iniciar, tela cheia...: ponteiro normal do Windows.
